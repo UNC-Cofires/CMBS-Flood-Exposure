@@ -1,0 +1,10 @@
+# Copy this file to config.yaml and fill in your own values.
+# config.yaml is listed in .gitignore and should NOT be committed.
+
+paths:
+  # Any paths EXTERNAL to the project directory (e.g., large data on /proj or /work)
+  trepp_data_dir: "/proj/characklab/projects/kieranf/CMBS/data/Trepp/raw_parquet"
+  included_states: "/proj/characklab/projects/kieranf/CMBS/analysis/US_state_list.txt"
+  included_CMBS_deals: "/proj/characklab/projects/kieranf/CMBS/data/Trepp/CIK_matching/public_1998-2025_conduit_CMBS_deals.parquet"
+
+# Add other user-specific settings here
