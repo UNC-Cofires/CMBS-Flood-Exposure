@@ -29,10 +29,12 @@ def geocode_address_using_here_api(query_string,API_KEY,base_delay=0.1,max_attem
     status_code = 0
 
     while (status_code != 200) and (num_attempts < max_attempts):
-        
-        res = requests.get(url,params=params)
+        try:
+            res = requests.get(url,params=params,timeout=10)
+            status_code = res.status_code
+        except:
+            status_code = 0 # Ensure loop retries
         time.sleep(base_delay*(2**num_attempts)) # Increase delay with each failed attempt
-        status_code = res.status_code
         num_attempts += 1
     
     geocoded_result['statusCode'] = status_code
