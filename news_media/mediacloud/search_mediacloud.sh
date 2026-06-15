@@ -16,6 +16,6 @@ export PYTHONWARNINGS="ignore"
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 source "$PROJECT_ROOT/config.sh"
 
-conda activate $CONDA_ENVIRONMENT_PATH
+conda activate $CRE_CONDA_ENV_PATH
 
 python3.12 search_mediacloud.py

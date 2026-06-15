@@ -1,1 +1,4 @@
-CONDA_ENVIRONMENT_PATH="/proj/characklab/projects/kieranf/CMBS/CRE-env-v1"
+CRE_CONDA_ENV_PATH="/proj/characklab/projects/kieranf/CMBS/CRE-env-v1"
+LLM_CONDA_ENV_PATH="/proj/characklab/projects/kieranf/local_LLMs/llm-env-v1"
+HF_HOME="/proj/characklab/projects/kieranf/local_LLMs/.cache/huggingface"
+HUGGING_FACE_HUB_TOKEN="my_hf_token"
