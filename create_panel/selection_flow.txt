@@ -1,26 +1,10 @@
 
-#--- Conduit CMBS deals ---#
+Starting number of loans: 111647
 
+1) Dropped loans known to be delinquent when first observed. Number of loans remaining: 111394
+2) Dropped multi-property loans. Number of loans remaining: 100239
+3) Dropped multi-note loans. Number of loans remaining: 96847
+4) Dropped loans from outside list of included states. Number of loans remaining: 96753
 
-Starting number of loans: 95268
-
-1) Dropped loans not observed until >720 days post-origination. Number of loans remaining: 89219
-2) Dropped loans known to be delinquent when first observed. Number of loans remaining: 89218
-3) Dropped multi-property loans. Number of loans remaining: 82499
-4) Dropped multi-note loans. Number of loans remaining: 79183
-
-Ending number of loans: 79183 (83.12%)
-
-
-#--- Agency CMBS deals ---#
-
-
-Starting number of loans: 151774
-
-1) Dropped loans not observed until >720 days post-origination. Number of loans remaining: 139266
-2) Dropped loans known to be delinquent when first observed. Number of loans remaining: 139255
-3) Dropped multi-property loans. Number of loans remaining: 139244
-4) Dropped multi-note loans. Number of loans remaining: 139244
-
-Ending number of loans: 139244 (91.74%)
+Ending number of loans: 96753 (86.66%)
 
