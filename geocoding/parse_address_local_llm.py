@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
+import time
+from datetime import timedelta
 import json
 import sys
 import os
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from vllm import LLM, SamplingParams
 from src.utils.config import find_project_root, load_config
 from llm_address_parsing_prompts import build_prompt
 
@@ -18,18 +19,18 @@ config = load_config()
 pwd = os.getcwd()
 
 # Get ID of local LLM to run
-MODEL_ID = sys.argv[1]
+MODEL_ID = sys.argv[1] 
 MODEL_NAME = MODEL_ID.split('/')[-1]
-print(f'Local LLM: {MODEL_NAME}')
+print(f'\nLocal LLM: {MODEL_NAME}\n')
 
-# Specify chunk size (e.g., save progress every 500 addresses)
-CHUNK_SIZE=500
+# Specify chunk size (e.g., save progress every 1000 addresses)
+CHUNK_SIZE=1000
 
 # Create folder for output
 outfolder = os.path.join(pwd,f'llm_address_parsing/{MODEL_NAME}')
 os.makedirs(outfolder,exist_ok=True)
 
-### *** LOAD DATA *** ###
+### *** LOAD ADDRESS DATA *** ###
 
 address_dir = os.path.join(pwd,'geocoding_input')
 address_data_path = os.path.join(address_dir,'filtered_loans_address_data.parquet')
@@ -46,183 +47,164 @@ completed_chunks = [int(x.split('.parquet')[0].split('_')[-1]) for x in complete
 address_data = address_data[~address_data['chunk'].isin(completed_chunks)]
 remaining_chunks = address_data['chunk'].unique()
 
-### *** LOAD MODEL *** ###
+### *** MODEL LOADING *** ###
 
-quantization_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True,
+# LLM() starts vLLM's inference engine and loads the model into GPU memory.
+# This happens once at startup. 
+
+llm = LLM(
+    
+    model=MODEL_ID,
+
+    # dtype: Numeric precision for model weights.
+    # "bfloat16" halves memory usage vs. float32 with minimal quality loss.
+    dtype="bfloat16",
+
+    # max_model_len: Maximum total sequence length (prompt + generated tokens).
+    # vLLM pre-allocates its KV cache based on this value, so keeping it
+    # smaller frees memory for larger batch sizes.
+    # The few-shot prompt in this script is roughly 2,000–3,000 tokens;
+    # 8192 gives ample headroom. Increase this value if you hit
+    # context-length errors at runtime.
+    max_model_len=8192,
+
+    # gpu_memory_utilization: Fraction of GPU VRAM vLLM may use (0.0–1.0).
+    # After loading model weights, vLLM pre-allocates the remaining share
+    # of this budget for the KV cache. 0.90 leaves a small safety margin
+    # to avoid out-of-memory errors from other GPU overhead.
+    gpu_memory_utilization=0.90,
 )
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, padding_side = "left")
+### *** SAMPLING PARAMETERS *** ###
 
-# LLaMA-based tokenizers do not define a pad token by default.
-# Setting it to eos_token is the standard workaround for batched inference.
-# The attention mask generated during tokenization ensures padded positions
-# are ignored by the model, so using eos_token here is safe.
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
+# Controls how the model generates output tokens.
 
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID,
-    quantization_config=quantization_config,
-    device_map="auto",
-    # Note: do NOT set torch_dtype manually when using bitsandbytes
+sampling_params = SamplingParams(
+    # temperature: Controls randomness in token selection.
+    # 0.0 = greedy decoding (always pick the highest-probability token).
+    # This is ideal for structured output tasks like JSON generation,
+    # where you want deterministic, consistent results rather than variety.
+    temperature=0.0,
+
+    # max_tokens: Maximum number of new tokens to generate per request.
+    # Setting this unnecessarily high wastes compute on padding;
+    # setting it too low risks truncating valid output.
+    max_tokens=2048,
 )
 
-### *** APPLY MODEL *** ###
+### *** PROMPT FORMATTING *** ###
 
-def _tokenize_batch(messages_list: list[list[dict]]) -> dict:
+def _format_prompt(messages: list[dict]) -> str:
     """
-    Applies the chat template to each conversation individually to produce
-    formatted strings, then tokenizes and left-pads all of them into a
-    single batch.
+    Converts a list of chat message dicts into a single formatted string.
 
-    Two-step approach (template → string, then tokenize) is used for
-    compatibility across Transformers versions and to keep padding logic
-    in one place.
+    vLLM's generate() method expects raw text strings, not message dicts.
+    apply_chat_template() handles converting the system/user/assistant turns
+    into whatever input format the specific model expects (e.g. Gemma's
+    <start_of_turn> / <end_of_turn> tokens).
 
-    Left padding (set on the tokenizer at load time) is required for
-    decoder-only models during batched generation: the generated tokens
-    must be right-aligned so that all sequences in the batch begin
-    generating from the same position.
+    Note: if llm.get_tokenizer() is not available in your vLLM version,
+    you can load the tokenizer separately instead:
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     """
-    text_inputs = [
-        tokenizer.apply_chat_template(
-            messages,
-            add_generation_prompt=True,
-            tokenize=False,         # Return a plain string, not tensors
-            enable_thinking=False,
-        )
-        for messages in messages_list
-    ]
-
-    # Tokenize all strings together so padding is applied uniformly
-    return tokenizer(
-        text_inputs,
-        return_tensors="pt",
-        padding=True,       # Pad to the longest sequence in the batch
-        truncation=False,
+    tokenizer = llm.get_tokenizer()
+    prompt = tokenizer.apply_chat_template(
+        messages,
+        # tokenize=False: Return a string rather than token IDs.
+        # vLLM handles tokenization internally — we just need the string.
+        tokenize=False,
+        # add_generation_prompt=True: Appends the model's "start of response"
+        # marker so the model knows it should begin generating a reply.
+        add_generation_prompt=True,
+        # enable_thinkign=False: disable thinking mode to save on computation
+        # this means that the model provides only the final response without
+        # explaining its reasoning. 
+        enable_thinking=False,
     )
 
+    return prompt
 
-def _decode_output(raw_output: str) -> dict:
+def parse_addresses_batch(addresses: list[str]) -> list[str]:
     """
-    Attempts to parse a JSON object from the model's raw output.
-    Returns a fallback dict with raw_output populated on failure.
+    Parse a list of address strings in a single vLLM call.
+
+    vLLM's core advantage over standard transformers inference is its ability
+    to efficiently schedule many requests concurrently using PagedAttention —
+    a memory management technique that avoids wasting GPU memory on padding.
+    Passing all addresses at once maximizes GPU utilization and throughput
+    compared to calling parse_address() in a loop.
+
+    Returns a list of raw JSON strings in the same order as the input list.
     """
+    # Build and format a prompt string for each address
+    prompts = [
+        _format_prompt(build_prompt(address))
+        for address in addresses
+    ]
+
+    # vLLM schedules all prompts together and returns results in input order
+    outputs = llm.generate(prompts, sampling_params)
+
+    # Extract the generated text string from each RequestOutput object
+    return [out.outputs[0].text for out in outputs]
+
+def postprocess_output_text(result,address_string,address_id):
+    """
+    This function converts raw JSON string representation of an address parsed using local LLMs
+    to a python dictionary while adding fields for the address_id and input string.
+
+    Returns a python dictionary. 
+    """
+
+    address_dict = {'address_id':address_id,'address_string':address_string,'parsing_errors':False}
+
+    # Attempt to parse JSON
     try:
-        cleaned = (
-            raw_output.strip()
-            .removeprefix("```json")
-            .removeprefix("```")
-            .removesuffix("```")
-            .strip()
-        )
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        print(f"Warning: Could not parse JSON from model output")
-        return {
-            "multiple_locations": None,
-            "range_too_large":    None,
-            "range_ambiguous":    None,
-            "addresses":          [],
-        }
+        address_dict = address_dict | json.loads(result)
 
+        # For single locations, enforce that address is equal to original string
+        if address_dict['multiple_locations'] == False:
+            address_dict['addresses'] = [address_string]
 
-def parse_addresses_batch(
-    address_ids: list,
-    address_strings: list[str],
-    batch_size: int = 8,
-) -> pd.DataFrame:
-    """
-    Classifies and expands a list of address strings in batches,
-    returning the results as a DataFrame.
+    except:
+        address_dict['parsing_errors'] = True
+        address_dict = address_dict | {'multiple_locations':pd.NA,'range_too_large':pd.NA,'range_ambiguous':pd.NA,'addresses':[]}
 
-    Args:
-        address_ids:     Identifiers for each address (any hashable type).
-        address_strings: Address strings to parse, one per ID.
-        batch_size:      Number of addresses per forward pass. Reduce this
-                         if you encounter GPU out-of-memory errors; the
-                         optimal value depends on GPU memory and prompt length.
+    # Sort locations alphabetically (modifies inplace)
+    address_dict['addresses'].sort()
+    
+    # Create field listing number of locations
+    address_dict['num_locations'] = len(address_dict['addresses'])
 
-    Returns:
-        A DataFrame with one row per input address and columns:
-            address_id, address_string, multiple_locations,
-            range_too_large, range_ambiguous, addresses, raw_output.
-        raw_output is None for rows where JSON parsing succeeded and
-        contains the raw model output for rows where it failed.
-    """
-    if len(address_ids) != len(address_strings):
-        raise ValueError("address_ids and address_strings must have the same length.")
-
-    records = []
-
-    for batch_start in range(0, len(address_strings), batch_size):
-        batch_ids     = address_ids[batch_start : batch_start + batch_size]
-        batch_strings = address_strings[batch_start : batch_start + batch_size]
-
-        print(
-            f"Processing addresses {batch_start + 1}–"
-            f"{batch_start + len(batch_strings)} of {len(address_strings)} ..."
-        )
-
-        # Build prompt messages and tokenize the whole batch at once
-        messages_list = [build_prompt(addr) for addr in batch_strings]
-        inputs = _tokenize_batch(messages_list).to(model.device)
-
-        # All sequences are left-padded to the same length, so a single
-        # input_length value correctly marks where generated tokens begin
-        # for every sequence in the batch.
-        input_length = inputs["input_ids"].shape[-1]
-
-        with torch.no_grad():
-            output_ids = model.generate(
-                **inputs,
-                max_new_tokens=2048,
-                do_sample=False,          # Ensures output is deterministic and reproducible
-                eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.eos_token_id,
-            )
-
-        # Decode and parse each sequence in the batch
-        for addr_id, addr_string, single_output in zip(
-            batch_ids, batch_strings, output_ids
-        ):
-            generated_tokens = single_output[input_length:]
-            raw_output = tokenizer.decode(
-                generated_tokens, skip_special_tokens=True
-            ).strip()
-
-            parsed = _decode_output(raw_output)
-
-            records.append({
-                "address_id":         addr_id,
-                "address_string":     addr_string,
-                "multiple_locations": parsed.get("multiple_locations"),
-                "range_too_large":    parsed.get("range_too_large"),
-                "range_ambiguous":    parsed.get("range_ambiguous"),
-                "addresses":          parsed.get("addresses", [])})
-
-    return pd.DataFrame(records).fillna(pd.NA)
+    return address_dict
 
 ### *** PROCESS ADDRESS DATA IN CHUNKS *** ###
 
 for chunk_number in remaining_chunks:
 
     print(f'\n# --- Chunk Number: {chunk_number} / {max(remaining_chunks)} --- #\n',flush=True)
-    
-    chunk_mask = (address_data['chunk']==chunk_number)
 
+    t1 = time.time()
+
+    # Get list of addresses to process in this chunk
+    chunk_mask = (address_data['chunk']==chunk_number)
     address_ids = address_data[chunk_mask]['masterloanidtrepp'].tolist()
     address_strings = address_data[chunk_mask]['address'].tolist()
 
     # Parse addresses
-    results_df = parse_addresses_batch(address_ids, address_strings, batch_size=25)
+    results = parse_addresses_batch(address_strings)
+    results_df = pd.DataFrame([postprocess_output_text(result,address_string,address_id) for result,address_string,address_id in zip(results,address_strings,address_ids)])
+
+    # Update column names and record the specific LLM used for parsing
     results_df.rename(columns={'address_id':'masterloanidtrepp'},inplace=True)
     results_df['model_id'] = MODEL_ID
 
     # Save results
     outname = os.path.join(outfolder,f'parsed_address_data_chunk_{chunk_number:04d}.parquet')
     results_df.to_parquet(outname)
+
+    t2 = time.time()
+
+    time_elapsed = timedelta(seconds=t2-t1)
+    print(f'Time elapsed: {time_elapsed}',flush=True)
