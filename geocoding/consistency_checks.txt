@@ -1,0 +1,12 @@
+
+Checking for consistency across the following LLMs:
+    Qwen3.5-9B-AWQ-4bit
+    gemma-4-12B-it-AWQ-INT4
+
+Number of addresses that were consistent across LLMs: 92306 / 96753 (95.40%)
+Number excluded because of inconsistencies across LLMs: 4447 / 96753 (4.60%)
+Number excluded because of JSON parsing errors: 0 / 96753 (0.0%)
+Number excluded because the range of addresses was too large: 3163 / 96753 (3.4%)
+Number excluded because the range of addresses was ambiguous: 669 / 96753 (0.8%)
+Final list of locations to geocode consists of 217581 addresses associated with 88474 unique loans.
+These loans represent 88474 / 96753 (91.44%) of the pre-parsing number of loans.
