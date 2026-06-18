@@ -19,6 +19,9 @@ source "$PROJECT_ROOT/config.sh"
 module purge
 module load anaconda
 
+# Load cuda module
+module load cuda/13.0
+
 # Activate environment
 conda activate $LLM_CONDA_ENV_PATH
 
