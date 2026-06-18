@@ -151,41 +151,39 @@ API_KEY = config['api_info']['here_geocoding_api_key']
 outfolder = os.path.join(pwd,'here_geocoding_api_output')
 os.makedirs(outfolder,exist_ok=True)
 
-# Specify chunk size (e.g., save progress every 500 addresses)
-CHUNK_SIZE=500
+# Specify chunk size (e.g., save progress every 1000 addresses)
+CHUNK_SIZE=1000
 
 ### *** LOAD DATA *** ###
 
-# Loan-level data to geocode
-loan_path = os.path.join(project_root,'create_panel/filtered_loans.parquet')
-usecols = ['masterloanidtrepp','propname','address','city','state','zip']
-loans = pd.read_parquet(loan_path,columns=usecols)
-loans = loans.groupby('masterloanidtrepp').last().reset_index()
+# Addresses to geocode
+address_data_path = os.path.join(pwd,'geocoding_input/parsed_loan_addresses.parquet')
+address_data = pd.read_parquet(address_data_path)
 
 # Break list of addresses into chunks
-loans['chunk'] = (np.arange(len(loans)) // CHUNK_SIZE) + 1
+address_data['chunk'] = (np.arange(len(address_data)) // CHUNK_SIZE) + 1
 
 # Determine which chunks we've already geocoded
 completed_chunks = [x for x in os.listdir(outfolder) if x.endswith('parquet')]
 completed_chunks = [int(x.split('.parquet')[0].split('_')[-1]) for x in completed_chunks]
 
-# Keep only those loans that are not yet geocoded
-loans = loans[~loans['chunk'].isin(completed_chunks)]
-remaining_chunks = loans['chunk'].unique()
+# Keep only those addresses that are not yet geocoded
+address_data = address_data[~address_data['chunk'].isin(completed_chunks)]
+remaining_chunks = address_data['chunk'].unique()
 
 ### *** GEOCODE PROPERTY ADDRESSES *** ###
 
 for chunk_number in tqdm(remaining_chunks,desc='Geocoding chunk'):
 
-    chunk_mask = (loans['chunk']==chunk_number)
+    chunk_mask = (address_data['chunk']==chunk_number)
 
     geocode_list = []
 
     # Process chunk of data
-    for index, row in loans[chunk_mask].iterrows():
+    for index, row in address_data[chunk_mask].iterrows():
         
         propname = row['propname']
-        address = row['address']
+        address = row['parsed_address']
         city = row['city']
         state = row['state']
         zip = row['zip']
@@ -200,5 +198,5 @@ for chunk_number in tqdm(remaining_chunks,desc='Geocoding chunk'):
     geocode_df = pd.DataFrame(geocode_list).drop(columns='chunk')
 
     # Save results
-    outname = os.path.join(outfolder,f'geocoded_loans_here_api_chunk_{chunk_number:04d}.parquet')
+    outname = os.path.join(outfolder,f'geocoded_loan_addresses_here_api_chunk_{chunk_number:04d}.parquet')
     geocode_df.to_parquet(outname)
