@@ -9,14 +9,20 @@ paths:
   usa_structures_dir: "/proj/characklab/projects/kieranf/flood_damage_index/data/USA_structures"
   nfhl_dir: "/proj/characklab/projects/kieranf/flood_damage_index/data/NFHL"
   nationwide_parcels: "/proj/characklab/projects/kieranf/CMBS/data/parcels/landrecords/2026Q2/LR_PARCEL_NATIONWIDE_FILE_US_2026_Q2.gpkg"
+  counties_2010: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/USA_counties/gz_2010_us_050_00_500k"
+  counties_2022: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/USA_counties/cb_2022_us_county_500k"
+  censusblockgroups_2000: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_blockgroups/2000_census_blockgroups"
+  censusblockgroups_2010: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_blockgroups/2010_census_blockgroups"
+  censusblockgroups_2020: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_blockgroups/2020_census_blockgroups"
+  zctas_2020: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_ZCTAs/tl_2020_us_zcta520"
 api_info:
   # API parameters and keys required to access APIs used in project
-  edgar_user_agent: "Firstname Lastname onyen@unc.edu"
-  mediacloud_api_key: "abc123"
-  here_geocoding_api_key: "abc123"
+  edgar_user_agent: "Kieran Fitzmason kfitzmason@unc.edu"
+  mediacloud_api_key: "my_api_key"
+  here_geocoding_api_key: "my_api_key"
 gis_params:
   # Coordinate reference systems and other GIS-related parameters
   geographic_crs: "EPSG:4326"
-  conus_projected_crs: "EPSG:5070"  
+  conus_projected_crs: "EPSG:5070"
   ak_projected_crs: "EPSG:6393"
   hi_projected_crs: "ESRI:102007"
