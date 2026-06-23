@@ -6,5 +6,16 @@ paths:
   trepp_data_dir: "/proj/characklab/projects/kieranf/CMBS/data/Trepp/raw_parquet"
   included_states: "/proj/characklab/projects/kieranf/CMBS/analysis/US_state_list.txt"
   included_CMBS_deals: "/proj/characklab/projects/kieranf/CMBS/data/Trepp/CIK_matching/public_1998-2025_conduit_CMBS_deals.parquet"
-
-# Add other user-specific settings here
+  usa_structures_dir: "/proj/characklab/projects/kieranf/flood_damage_index/data/USA_structures"
+  nfhl_dir: "/proj/characklab/projects/kieranf/flood_damage_index/data/NFHL"
+api_info:
+  # API parameters and keys required to access APIs used in project
+  edgar_user_agent: "Firstname Lastname onyen@unc.edu"
+  mediacloud_api_key: "abc123"
+  here_geocoding_api_key: "abc123"
+gis_params:
+  # Coordinate reference systems and other GIS-related parameters
+  geographic_crs: "EPSG:4326"
+  conus_projected_crs: "EPSG:5070"  
+  ak_projected_crs: "EPSG:6393"
+  hi_projected_crs: "ESRI:102007"
