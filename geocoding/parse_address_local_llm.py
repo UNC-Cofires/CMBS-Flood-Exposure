@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import time
 from datetime import timedelta
+from copy import deepcopy
 import json
 import sys
 import os
@@ -82,21 +83,13 @@ def postprocess_output_text(result,address_string,address_id):
 
     # Attempt to parse JSON
     try:
-        address_dict = address_dict | json.loads(result)
-
-        # For single locations, enforce that address is equal to original string
-        if address_dict['multiple_locations'] == False:
-            address_dict['addresses'] = [address_string]
+        # Get unique address components identified in string (list of dicts)
+        address_components = json.loads(result)
+        address_dict['address_components'] = deepcopy(address_components)
 
     except:
         address_dict['parsing_errors'] = True
-        address_dict = address_dict | {'multiple_locations':pd.NA,'range_too_large':pd.NA,'range_ambiguous':pd.NA,'addresses':[]}
-
-    # Sort locations alphabetically (modifies inplace)
-    address_dict['addresses'].sort()
-    
-    # Create field listing number of locations
-    address_dict['num_locations'] = len(address_dict['addresses'])
+        address_dict['address_components'] = []
 
     return address_dict
 
@@ -161,10 +154,10 @@ if __name__ == '__main__':
         # max_model_len: Maximum total sequence length (prompt + generated tokens).
         # vLLM pre-allocates its KV cache based on this value, so keeping it
         # smaller frees memory for larger batch sizes.
-        # The few-shot prompt in this script is roughly 2,000–3,000 tokens;
-        # 8192 gives ample headroom. Increase this value if you hit
+        # The few-shot prompt in this script is roughly 8000 tokens;
+        # 16000 gives ample headroom. Increase this value if you hit
         # context-length errors at runtime.
-        max_model_len=8192,
+        max_model_len=16000,
     
         # gpu_memory_utilization: Fraction of GPU VRAM vLLM may use (0.0–1.0).
         # After loading model weights, vLLM pre-allocates the remaining share

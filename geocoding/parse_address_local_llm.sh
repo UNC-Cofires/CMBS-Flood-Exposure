@@ -30,11 +30,11 @@ export HF_HOME=$HF_HOME
 export HUGGING_FACE_HUB_TOKEN=$HUGGING_FACE_HUB_TOKEN
 export PYTHONWARNINGS="ignore"
 
-# Parse addresses using quantized version of Qwen3.5-9B
-python3.12 parse_address_local_llm.py "cyankiwi/Qwen3.5-9B-AWQ-4bit"
-
 # Parse addresses using quantized version of gemma-4-12B-it
 python3.12 parse_address_local_llm.py "cyankiwi/gemma-4-12B-it-AWQ-INT4"
+
+# Parse addresses using quantized version of Qwen3.5-9B
+python3.12 parse_address_local_llm.py "cyankiwi/Qwen3.5-9B-AWQ-4bit"
 
 # Deactivate environment
 conda deactivate

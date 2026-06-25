@@ -1,199 +1,454 @@
-# This scripts contains LLM prompts for CMBS loan address parsing
+# This script contains LLM prompts for CMBS loan address parsing
 
 SYSTEM_PROMPT = """\
-You are an address parsing assistant. Analyze address strings and determine \
-whether they refer to multiple distinct building locations.
+You are an expert address parser for commercial property records. Your sole task \
+is to parse a raw address string into a structured JSON array of address \
+components. Output only valid JSON — no explanations, no commentary, and no \
+markdown formatting.
 
-An address string refers to multiple locations if it contains:
-- Hyphenated address ranges (e.g., "150-154 Main St" means buildings 150, 151, 152, 153, 154)
-- Multiple street addresses separated by commas, "&", ";", "and", or other conjunctions,
-  where each part contains a building number
+OUTPUT SCHEMA
 
-An address string refers to a SINGLE location if it is:
-- A single unambiguous address (e.g., "742 Evergreen Terrace")
-- A street intersection, which may be indicated by any of the following formats:
-    - Cardinal corner abbreviations: NEC, NWC, SEC, or SWC followed by two street names
-      (e.g., "NEC of Coldwater Rd & Noble Drive")
-    - "Corner of" phrasing (e.g., "Corner of Main Street and Oak Avenue")
-    - Two street names with no building numbers joined by "and"
-      (e.g., "Elm Street and Park Avenue")
-    - Two street names separated by "/" (e.g., "Broadway / Canal Street")
-    - Two street names separated by "@" (e.g., "Elm St @ Park Ave")
+Each element of the output array is a JSON object with the following fields:
 
-Rules:
-1. For hyphenated ranges where the second number is strictly greater than the
-   first (e.g., "10-14", "150-154"), expand by listing every integer from the
-   first number to the second number inclusive.
-2. For hyphenated ranges where the second number is strictly less than the first
-   number (e.g., "32622-25"), the range is ambiguous and cannot be reliably
-   expanded. Set range_ambiguous to true and return an empty addresses list.
-3. Preserve the full street name, direction, and type for each expanded address.
-4. If expanding all ranges in the string would result in more than 100 total
-   addresses, do NOT expand them. Instead, set range_too_large to true and
-   return an empty addresses list.
-5. Respond ONLY with a valid JSON object — no explanation, no extra text.
+  "address_type"         : string — must be "exact", "range", or "approximate"
+  "first_building_number": integer, or null when address_type is "approximate"
+  "last_building_number" : integer, or null when address_type is "approximate"
+  "street"               : string — full street name including any directional
+                           prefix or suffix (e.g. "E", "W", "North")
 
-JSON schema:
-{
-  "multiple_locations": <boolean>,
-  "range_too_large": <boolean>,
-  "range_ambiguous": <boolean>,
-  "addresses": [<list of individual address strings>]
-}
-If multiple_locations is false, range_too_large, range_ambiguous, and addresses
-should be set to false, false, and [] respectively.
-If range_too_large or range_ambiguous is true, addresses should be an empty list.
+When address_type is "exact", first_building_number and last_building_number
+must be equal. When address_type is "approximate", both must be null.
+
+CLASSIFICATION RULES
+
+1. EXACT — The address identifies a single, specific building number.
+   Set first_building_number and last_building_number to the same integer.
+
+2. RANGE — The address identifies a span of building numbers using a hyphen.
+   Set first_building_number to the first number and last_building_number to
+   the second number. Preserve both numbers exactly as they appear — do not
+   expand abbreviated ranges (e.g. "32622-25" → first: 32622, last: 25).
+   A hyphen that is part of a street or highway name (e.g. "US-9") is NOT a
+   range separator.
+
+3. APPROXIMATE — The address has no specific building number.
+   This includes: intersections, corner descriptions, and bare street or highway names. 
+   Set both number fields to null and preserve the full original text in the "street" field.
+
+PARSING RULES
+
+MULTIPLE NUMBERS, ONE STREET
+  If several building numbers share one street name, emit one component per
+  number. Numbers may be separated by commas, "and", "&", spaces, or "/".
+
+MULTIPLE STREETS
+  If the string spans more than one street, emit a separate component for
+  each street address. Street addresses may be separated by ";", "&", "and",
+  "a/k/a", or similar tokens.
+
+INTERSECTIONS AND CORNERS
+  Phrases such as "Corner of X and Y", "NEC/NWC/SEC/SWC of X & Y", "X at Y",
+  or "X / Y" — when neither part carries a building number — are APPROXIMATE.
+  Preserve the entire phrase in the "street" field.
+
+BARE STREET OR HIGHWAY NAMES
+  A street name or highway reference with no building number is APPROXIMATE.
+
+SEPARATOR DISAMBIGUATION
+  "&" and "and" can separate (a) multiple building numbers on the same street,
+  or (b) entirely separate street addresses. Use context to decide: if each
+  token before the separator is followed by its own distinct street name, treat
+  the separator as an address separator; otherwise treat it as a number
+  separator within one street.
 """
 
 FEW_SHOT_EXAMPLES = [
-    # --- Multi-location: hyphenated ranges across multiple streets ---
+    # --- Single exact address (1st example) ---
     {
-        "input": "150-154 South Whitney Street, 149-151 Sisson Avenue, 28-30 Kibbe Street and 63-65 Evergreen Avenue",
-        "output": """{
-  "multiple_locations": true,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": [
-    "150 South Whitney Street",
-    "151 South Whitney Street",
-    "152 South Whitney Street",
-    "153 South Whitney Street",
-    "154 South Whitney Street",
-    "149 Sisson Avenue",
-    "150 Sisson Avenue",
-    "151 Sisson Avenue",
-    "28 Kibbe Street",
-    "29 Kibbe Street",
-    "30 Kibbe Street",
-    "63 Evergreen Avenue",
-    "64 Evergreen Avenue",
-    "65 Evergreen Avenue"
-  ]
-}"""
-    },
-    # --- Single location: plain address ---
+        "input": "27 Rogerson Drive",
+        "output": """[
     {
-        "input": "742 Evergreen Terrace",
-        "output": """{
-  "multiple_locations": false,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": []
-}"""
+        "address_type": "exact",
+        "first_building_number": 27,
+        "last_building_number": 27,
+        "street": "Rogerson Drive"
+    }
+]"""
     },
-    # --- Multi-location: two addresses joined by "and" ---
+    # --- Single exact address (2nd example) ---
     {
-        "input": "10 and 12 Oak Street",
-        "output": """{
-  "multiple_locations": true,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": [
-    "10 Oak Street",
-    "12 Oak Street"
-  ]
-}"""
-    },
-    # --- Single location: named corner with cardinal abbreviation (NEC) ---
-    # "NEC" (Northeast Corner) indicates an intersection, not multiple buildings.
-    # The "&" here joins two street names, not two separate addresses.
+        "input": "18950 Marsh Lane",
+        "output": """[
     {
-        "input": "NEC of Coldwater Rd & Noble Drive",
-        "output": """{
-  "multiple_locations": false,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": []
-}"""
+        "address_type": "exact",
+        "first_building_number": 18950,
+        "last_building_number": 18950,
+        "street": "Marsh Lane"
+    }
+]"""
     },
-    # --- Single location: other cardinal corner abbreviation (SWC) ---
+    # --- Single address with highway numbers ---
     {
-        "input": "SWC of Elm St & 1st Ave",
-        "output": """{
-  "multiple_locations": false,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": []
-}"""
-    },
-    # --- Single location: corner described with "Corner of" phrasing ---
+        "input": "10601 NC Highway 97",
+        "output": """[
     {
-        "input": "Corner of Main Street and Oak Avenue",
-        "output": """{
-  "multiple_locations": false,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": []
-}"""
+        "address_type": "exact",
+        "first_building_number": 10601,
+        "last_building_number": 10601,
+        "street": "NC Highway 97"
+    }
+]"""
     },
-    # --- Single location: bare intersection with "and" ---
-    # Two street names with no building numbers — this is an intersection.
+    # --- Single address with highway numbers ---
+    {
+        "input": "1643 Route 82",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 1643,
+        "last_building_number": 1643,
+        "street": "Route 82"
+    }
+]"""
+    },
+    # --- Single range address ---
+    {
+        "input": "6022-6042 State Street",
+        "output": """[
+    {
+        "address_type": "range",
+        "first_building_number": 6022,
+        "last_building_number": 6042,
+        "street": "State Street"
+    }
+]"""
+    },
+    # --- Approximate: bare intersection joined by "and" ---
     {
         "input": "Elm Street and Park Avenue",
-        "output": """{
-  "multiple_locations": false,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": []
-}"""
+        "output": """[
+    {
+        "address_type": "approximate",
+        "first_building_number": null,
+        "last_building_number": null,
+        "street": "Elm Street and Park Avenue"
+    }
+]"""
     },
-    # --- Single location: slash notation ---
+    # --- Approximate: "Corner of" phrasing ---
+    {
+        "input": "Corner of Main Street and Oak Avenue",
+        "output": """[
+    {
+        "address_type": "approximate",
+        "first_building_number": null,
+        "last_building_number": null,
+        "street": "Corner of Main Street and Oak Avenue"
+    }
+]"""
+    },
+    # --- Approximate: cardinal corner abbreviation (NEC) ---
+    {
+        "input": "NEC of Elm St & 1st Ave",
+        "output": """[
+    {
+        "address_type": "approximate",
+        "first_building_number": null,
+        "last_building_number": null,
+        "street": "NEC of Elm St & 1st Ave"
+    }
+]"""
+    },
+    # --- Approximate: slash notation intersection ---
     {
         "input": "Broadway / Canal Street",
-        "output": """{
-  "multiple_locations": false,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": []
-}"""
-    },
-    # --- Single location: at (@) notation ---
+        "output": """[
     {
-        "input": "Elm St @ Park Ave",
-        "output": """{
-  "multiple_locations": false,
-  "range_too_large": false,
-  "range_ambiguous": false,
-  "addresses": []
-}"""
+        "address_type": "approximate",
+        "first_building_number": null,
+        "last_building_number": null,
+        "street": "Broadway / Canal Street"
+    }
+]"""
     },
-    # --- Multi-location: ambiguous range (second number less than first) ---
-    # 25 < 32622, so the range cannot be reliably expanded.
-    # range_ambiguous is set to true and addresses is left empty.
+    # --- Approximate: bare highway reference ---
     {
-        "input": "32622-25 Nantasket Drive",
-        "output": """{
-  "multiple_locations": true,
-  "range_too_large": false,
-  "range_ambiguous": true,
-  "addresses": []
-}"""
+        "input": "Hwy 84",
+        "output": """[
+    {
+        "address_type": "approximate",
+        "first_building_number": null,
+        "last_building_number": null,
+        "street": "Hwy 84"
+    }
+]"""
     },
-    # --- Multi-location: "&" separating two addressed properties with ambiguous range ---
-    # Both sides have building numbers, so "&" is an address separator.
-    # However, "32622-25" is ambiguous (25 < 32622), so the range cannot be expanded.
+    # --- Approximate: bare street name beginning with an ordinal number ---
     {
-        "input": "6600 Beachview Drive & 32622-25 Nantasket Drive",
-        "output": """{
-  "multiple_locations": true,
-  "range_too_large": false,
-  "range_ambiguous": true,
-  "addresses": []
-}"""
+        "input": "1st Avenue",
+        "output": """[
+    {
+        "address_type": "approximate",
+        "first_building_number": null,
+        "last_building_number": null,
+        "street": "1st Avenue"
+    }
+]"""
     },
-    # --- Multi-location: range that exceeds the 100-address limit ---
-    # 1 to 250 would produce 250 addresses, exceeding the limit of 100.
-    # range_too_large is set to true and addresses is left empty.
+    # --- Approximate: southeast cardinal corner with highway and road names ---
     {
-        "input": "1-250 Main Street",
-        "output": """{
-  "multiple_locations": true,
-  "range_too_large": true,
-  "range_ambiguous": false,
-  "addresses": []
-}"""
+        "input": "SEC IH - 35 & Country RD 170",
+        "output": """[
+    {
+        "address_type": "approximate",
+        "first_building_number": null,
+        "last_building_number": null,
+        "street": "SEC IH - 35 & Country RD 170"
+    }
+]"""
+    },
+    # --- Multiple exact addresses: comma-separated numbers on one street ---
+    {
+        "input": "27, 30, and 35 Rogerson Drive",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 27,
+        "last_building_number": 27,
+        "street": "Rogerson Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 30,
+        "last_building_number": 30,
+        "street": "Rogerson Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 35,
+        "last_building_number": 35,
+        "street": "Rogerson Drive"
+    }
+]"""
+    },
+    # --- Mixed exact and range on one street ---
+    {
+        "input": "27, 30, and 35-42 Rogerson Drive",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 27,
+        "last_building_number": 27,
+        "street": "Rogerson Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 30,
+        "last_building_number": 30,
+        "street": "Rogerson Drive"
+    },
+    {
+        "address_type": "range",
+        "first_building_number": 35,
+        "last_building_number": 42,
+        "street": "Rogerson Drive"
+    }
+]"""
+    },
+        # --- Two ranges on one street ---
+    {
+        "input": "2305-2313 & 2501-2621 Thonotosassa Road",
+        "output": """[
+    {
+        "address_type": "range",
+        "first_building_number": 2305,
+        "last_building_number": 2313,
+        "street": "Thonotosassa Road"
+    },
+    {
+        "address_type": "range",
+        "first_building_number": 2501,
+        "last_building_number": 2621,
+        "street": "Thonotosassa Road"
+    }
+]"""
+    },
+    # --- Two exact addresses on different streets, separated by "&" ---
+    {
+        "input": "27 Rogerson Drive & 123 W Franklin Street;",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 27,
+        "last_building_number": 27,
+        "street": "Rogerson Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 123,
+        "last_building_number": 123,
+        "street": "W Franklin Street"
+    }
+]"""
+    },
+    # --- Exact + range on different streets ---
+    {
+        "input": "27 Rogerson Drive & 123-145 W Franklin Street",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 27,
+        "last_building_number": 27,
+        "street": "Rogerson Drive"
+    },
+    {
+        "address_type": "range",
+        "first_building_number": 123,
+        "last_building_number": 145,
+        "street": "W Franklin Street"
+    }
+]"""
+    },
+    # --- Multiple streets separated by semicolons ---
+    {
+        "input": "49 Edgewater Ave; 27 & 28 Rogerson Drive; 1800-1900 E Franklin Street",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 49,
+        "last_building_number": 49,
+        "street": "Edgewater Ave"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 27,
+        "last_building_number": 27,
+        "street": "Rogerson Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 28,
+        "last_building_number": 28,
+        "street": "Rogerson Drive"
+    },
+    {
+        "address_type": "range",
+        "first_building_number": 1800,
+        "last_building_number": 1900,
+        "street": "E Franklin Street"
+    }
+]"""
+    },
+    # --- "a/k/a" separating multiple names for same address ---
+    {
+        "input": "301/303 East 75th Street a/k/a 1440/1446 2nd Avenue",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 301,
+        "last_building_number": 301,
+        "street": "East 75th Street"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 303,
+        "last_building_number": 303,
+        "street": "East 75th Street"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 1440,
+        "last_building_number": 1440,
+        "street": "2nd Avenue"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 1446,
+        "last_building_number": 1446,
+        "street": "2nd Avenue"
+    }
+]"""
+    },
+    # --- Space-separated building numbers on one street, plus a second street ---
+    {
+        "input": "110 121 140 South Pointe Drive & 79 Industrial Par",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 110,
+        "last_building_number": 110,
+        "street": "South Pointe Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 121,
+        "last_building_number": 121,
+        "street": "South Pointe Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 140,
+        "last_building_number": 140,
+        "street": "South Pointe Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 79,
+        "last_building_number": 79,
+        "street": "Industrial Par"
+    }
+]"""
+    },
+    # --- Space-separated numbers on one street, plus an abbreviated range ---
+    {
+        "input": "110 121 140 South Pointe Drive & 32622-25 Nantasket Drive",
+        "output": """[
+    {
+        "address_type": "exact",
+        "first_building_number": 110,
+        "last_building_number": 110,
+        "street": "South Pointe Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 121,
+        "last_building_number": 121,
+        "street": "South Pointe Drive"
+    },
+    {
+        "address_type": "exact",
+        "first_building_number": 140,
+        "last_building_number": 140,
+        "street": "South Pointe Drive"
+    },
+    {
+        "address_type": "range",
+        "first_building_number": 32622,
+        "last_building_number": 25,
+        "street": "Nantasket Drive"
+    }
+]"""
+    },
+    # --- Range on a hyphenated highway name, plus an approximate address ---
+    {
+        "input": "81-119 US-9 South & Highway 92 at Alabama Road",
+        "output": """[
+    {
+        "address_type": "range",
+        "first_building_number": 81,
+        "last_building_number": 119,
+        "street": "US-9 South"
+    },
+    {
+        "address_type": "approximate",
+        "first_building_number": null,
+        "last_building_number": null,
+        "street": "Highway 92 at Alabama Road"
+    }
+]"""
     },
 ]
+
 
 def build_prompt(address: str) -> list[dict]:
     """
