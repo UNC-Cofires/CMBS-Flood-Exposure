@@ -8,7 +8,7 @@ paths:
   included_CMBS_deals: "/proj/characklab/projects/kieranf/CMBS/data/Trepp/CIK_matching/public_1998-2025_conduit_CMBS_deals.parquet"
   usa_structures_dir: "/proj/characklab/projects/kieranf/flood_damage_index/data/USA_structures"
   nfhl_dir: "/proj/characklab/projects/kieranf/flood_damage_index/data/NFHL"
-  nationwide_parcels: "/proj/characklab/projects/kieranf/CMBS/data/parcels/landrecords/2026Q2/LR_PARCEL_NATIONWIDE_FILE_US_2026_Q2.gpkg"
+  parcels_dir: "/proj/characklab/projects/kieranf/CMBS/data/parcels/landrecords/2026Q2/by_state"
   counties_2010: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/USA_counties/gz_2010_us_050_00_500k"
   counties_2022: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/USA_counties/cb_2022_us_county_500k"
   censusblockgroups_2000: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_blockgroups/2000_census_blockgroups"
