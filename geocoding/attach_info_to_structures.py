@@ -155,8 +155,7 @@ blockgroups_2010 = blockgroups_2010[blockgroups_2010.intersects(buffered_state_a
 blockgroups_2020 = blockgroups_2020[blockgroups_2020.intersects(buffered_state_area_geog_mask)].to_crs(proj_crs)
 
 ## Zip code tabulation areas (ZCTAs)
-ZCTA_path = '/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_ZCTAs/tl_2020_us_zcta520'
-ZCTAs = gpd.read_file(ZCTA_path).to_crs(geog_crs).rename(columns={'GEOID20':'zcta_2020'})[['zcta_2020','geometry']]
+ZCTAs = gpd.read_file(config['paths']['zctas_2020']).to_crs(geog_crs).rename(columns={'GEOID20':'zcta_2020'})[['zcta_2020','geometry']]
 ZCTAs = ZCTAs[ZCTAs.intersects(buffered_state_area_geog_mask)].to_crs(proj_crs)
 
 ## National Flood Hazard Layer (NFHL)
