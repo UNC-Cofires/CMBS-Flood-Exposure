@@ -73,23 +73,23 @@ def parse_addresses_batch(addresses: list[str]) -> list[str]:
 
 def postprocess_output_text(result,address_string,address_id):
     """
-    This function converts raw JSON string representation of an address parsed using local LLMs
-    to a python dictionary while adding fields for the address_id and input string.
-
+    This function checks whether the string representation of address components
+    returned by an LLM is a valid JSON  while adding fields for the address_id 
+    and input address_string. 
+    
     Returns a python dictionary. 
     """
 
     address_dict = {'address_id':address_id,'address_string':address_string,'parsing_errors':False}
 
-    # Attempt to parse JSON
+    # Attempt to parse JSON output
     try:
-        # Get unique address components identified in string (list of dicts)
-        address_components = json.loads(result)
-        address_dict['address_components'] = deepcopy(address_components)
+        address_dict['address_components'] = json.dumps(json.loads(result))
 
+    # If errors occur, make a note of this and return an empty JSON array
     except:
         address_dict['parsing_errors'] = True
-        address_dict['address_components'] = []
+        address_dict['address_components'] = json.dumps([])
 
     return address_dict
 
