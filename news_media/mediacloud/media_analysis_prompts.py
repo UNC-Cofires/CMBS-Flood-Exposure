@@ -29,7 +29,7 @@ infectious disease outbreaks, earthquakes, volcanic eruptions, or wildfires
 Respond using exactly the following JSON format. Do not include any text outside the JSON object.
 
 {
-  "classification"": <true | false>,
+  "classification": <true | false>,
   "reasoning": "<One sentence explaining your decision.>"
 }
 """
