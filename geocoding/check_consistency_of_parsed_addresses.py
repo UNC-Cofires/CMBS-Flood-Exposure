@@ -108,7 +108,7 @@ outname = os.path.join(address_dir,'consistent_parsed_addresses.parquet')
 consistent_addresses.to_parquet(outname)
 
 outname = os.path.join(address_dir,'consistent_parsed_addresses_random_sample.parquet')
-consistent_addresses.to_parquet(outname)
+consistent_review_sample.to_parquet(outname)
 
 outname = os.path.join(address_dir,'manual_review_parsed_addresses.parquet')
-consistent_addresses.to_parquet(outname)
+manual_review_addresses.to_parquet(outname)
