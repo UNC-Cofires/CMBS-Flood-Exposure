@@ -145,9 +145,9 @@ if __name__ == '__main__':
         # vLLM pre-allocates its KV cache based on this value, so keeping it
         # smaller frees memory for larger batch sizes.
         # The few-shot prompt in this script is roughly 2000 tokens;
-        # 8000 gives ample headroom. Increase this value if you hit
+        # 5000 gives ample headroom. Increase this value if you hit
         # context-length errors at runtime.
-        max_model_len=8000,
+        max_model_len=5000,
     
         # gpu_memory_utilization: Fraction of GPU VRAM vLLM may use (0.0–1.0).
         # After loading model weights, vLLM pre-allocates the remaining share
@@ -181,8 +181,16 @@ if __name__ == '__main__':
     
         t1 = time.time()
     
-        # Get list of article titles and urls
+        # Read in data on news articles
         articles = pd.read_parquet(input_filepath)
+
+        # Truncate any titles or URLs longer than 1000 characters
+        # (Prevents memory- or token-related errors if input contains 
+        #  gibberish due to errors in mediacloud databse)
+        articles['url'] = articles['url'].apply(lambda x: x[:1000])
+        articles['title'] = articles['title'].apply(lambda x: x[:1000])
+
+        # Get list of article ids, titles, and urls
         article_ids = articles['id'].tolist()
         article_urls = articles['url'].tolist()
         article_titles = articles['title'].tolist()
