@@ -187,8 +187,8 @@ if __name__ == '__main__':
         # Truncate any titles or URLs longer than 1000 characters
         # (Prevents memory- or token-related errors if input contains 
         #  gibberish due to errors in mediacloud databse)
-        articles['url'] = articles['url'].apply(lambda x: x[:1000])
-        articles['title'] = articles['title'].apply(lambda x: x[:1000])
+        articles['url'] = articles['url'].str.slice(0,1000)
+        articles['title'] = articles['title'].str.slice(0,1000)
 
         # Get list of article ids, titles, and urls
         article_ids = articles['id'].tolist()
