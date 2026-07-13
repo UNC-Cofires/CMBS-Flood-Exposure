@@ -1,0 +1,2 @@
+Number of loans included in set to be geocoded: 95077 / 96753 (98.27%)
+Number of potential addresses associated with loans: 442358
