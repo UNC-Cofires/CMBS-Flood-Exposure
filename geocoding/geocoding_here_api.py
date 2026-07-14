@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import time
 import os
-from tqdm import tqdm
 from src.utils.config import find_project_root, load_config
 
 ### *** HELPER FUCNTIONS *** ###
@@ -148,55 +147,61 @@ pwd = os.getcwd()
 API_KEY = config['api_info']['here_geocoding_api_key']
 
 # Create folder for output
-outfolder = os.path.join(pwd,'here_geocoding_api_output')
+outfolder = os.path.join(pwd,'geocoding_output')
 os.makedirs(outfolder,exist_ok=True)
+output_data_path = os.path.join(outfolder,'geocoding_output_here_api.parquet')
 
-# Specify chunk size (e.g., save progress every 1000 addresses)
-CHUNK_SIZE=1000
+# Specify chunk size (e.g., save progress every 100 addresses)
+CHUNK_SIZE=100
 
 ### *** LOAD DATA *** ###
 
 # Addresses to geocode
-address_data_path = os.path.join(pwd,'geocoding_input/parsed_loan_addresses.parquet')
+address_data_path = os.path.join(pwd,'geocoding_input/addresses_to_geocode.parquet')
 address_data = pd.read_parquet(address_data_path)
+num_addresses = len(address_data)
 
-# Break list of addresses into chunks
-address_data['chunk'] = (np.arange(len(address_data)) // CHUNK_SIZE) + 1
-
-# Determine which chunks we've already geocoded
-completed_chunks = [x for x in os.listdir(outfolder) if x.endswith('parquet')]
-completed_chunks = [int(x.split('.parquet')[0].split('_')[-1]) for x in completed_chunks]
-
-# Keep only those addresses that are not yet geocoded
-address_data = address_data[~address_data['chunk'].isin(completed_chunks)]
-remaining_chunks = address_data['chunk'].unique()
+# Previously-geocoded addresses
+if os.path.exists(output_data_path):
+    output_data = pd.read_parquet(output_data_path)
+    
+    # Remove addresses that have already been geocoded
+    address_data = pd.concat([address_data,output_data[address_data.columns]]).drop_duplicates(keep=False)
+else:
+    output_data = None
 
 ### *** GEOCODE PROPERTY ADDRESSES *** ###
 
-for chunk_number in tqdm(remaining_chunks,desc='Geocoding chunk'):
-
-    chunk_mask = (address_data['chunk']==chunk_number)
-
-    geocode_list = []
+while len(address_data) > 0:
 
     # Process chunk of data
-    for index, row in address_data[chunk_mask].iterrows():
-        
-        propname = row['propname']
-        address = row['parsed_address']
-        city = row['city']
-        state = row['state']
-        zip = row['zip']
-        
-        query_string = f'{address}, {city}, {state} {zip}'
-        
-        geocode_result = geocode_address_using_here_api(query_string,API_KEY)
+    batch = address_data.iloc[:CHUNK_SIZE]
+
+    geocode_list = []
+    
+    for index, row in batch.iterrows():
+            
+        geocode_result = geocode_address_using_here_api(row['query_string'],API_KEY)
         geocode_result = dict(row) | geocode_result
         geocode_list.append(geocode_result)
-
-    # Assemble into dataframe
-    geocode_df = pd.DataFrame(geocode_list).drop(columns='chunk')
-
+    
+    processed_batch = pd.DataFrame(geocode_list)
+    
     # Save results
-    outname = os.path.join(outfolder,f'geocoded_loan_addresses_here_api_chunk_{chunk_number:04d}.parquet')
-    geocode_df.to_parquet(outname)
+    if output_data is not None:
+        output_data = pd.concat([output_data,processed_batch])
+    else:
+        output_data = processed_batch
+    
+    output_data.to_parquet(output_data_path)
+
+    # Update list of remaining addresses
+    address_data = address_data.iloc[CHUNK_SIZE:]
+    
+    # Print update
+    num_processed = len(output_data)
+    percent_processed = 100*(num_processed / num_addresses)
+    num_remaining = len(address_data)
+    print(f'Number of addresses geocoded: {num_processed} / {num_addresses} ({percent_processed:.2f}%). Number remaining: {num_remaining}',flush=True)
+
+print('Geocoding complete.',flush=True)
