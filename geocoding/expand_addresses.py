@@ -237,7 +237,7 @@ address_data = address_data.explode('parsed_address')
 
 # Drop loans whose parsed address is NA. 
 # This will occur if the address_type is "approximate" (e.g., "Corner of Main Street and Oak Blvd")
-address_data = address_data[~address_data['parsed_address'].isna()].reset_index(drop=True)
+address_data = address_data[~address_data['parsed_address'].isna()].drop_duplicates().reset_index(drop=True)
 
 # Add informaation on city, state, and zip to string that we'll pass to the geocoder
 address_data['query_string'] = address_data.apply(lambda x: f'{x['parsed_address']}, {x['city']}, {x['state']} {x['zip']}',axis=1)
