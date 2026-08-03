@@ -1,0 +1,45 @@
+---
+title: "Your Manuscript Title"
+author:
+  - name: Kieran P. Fitzmason
+    corresponding: true
+    email: kfitzmason@unc.edu
+    orcid: 0009-0005-2774-635X   # optional but good practice
+    affiliations:
+      - name: University of North Carolina at Chapel Hill
+        department: Institute for Risk Management and Insurance Innovation
+  - name: Co-Author Name
+    affiliations:
+      - name: Their Institution
+        department: Their Department
+
+abstract: |
+  This paper examines ... We use data from ... to show that ... 
+  Our findings suggest ... These results have implications for ...
+
+keywords:
+  - housing markets
+  - keyword2
+  - keyword3
+
+date: today
+date-format: long
+
+bibliography: references.bib
+
+jupyter: CRE-env-v1   # must match the kernel you registered
+
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    theme: cosmo
+  pdf:
+    documentclass: article
+    number-sections: true
+    colorlinks: true
+    geometry:
+      - margin=1in
+    fontsize: 12pt
+---

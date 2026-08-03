@@ -1,0 +1,15 @@
+project:
+  type: manuscript
+
+manuscript:
+  article: index.qmd   # explicit but good practice
+
+execute:
+  freeze: auto
+
+format:
+  html:
+    toc: true
+  pdf:
+    documentclass: article
+    number-sections: true
