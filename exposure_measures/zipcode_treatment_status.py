@@ -24,15 +24,19 @@ def evaluate_treatment_status(event_timeseries,calendar_time,treatment_duration)
 
     # Calculate number of flood events over previous n years
     event_timeseries = pd.Series(event_timeseries)
-    window = event_timeseries.rolling(window=treatment_duration,center=False)
-    number_of_events = window.sum().fillna(0).astype(int)
+    number_of_events = event_timeseries.rolling(window=treatment_duration,min_periods=1,center=False).sum()
     
     # Create indicator for whether more than one event occurred in the past n years
     multiple_events = (number_of_events > 1).astype(int)
+
+    # Create indicator for repetitive treatment event
+    repeat_treatment_event = ((event_timeseries == 1)&(multiple_events == 1)).astype(int)
+    number_of_repeat_events = repeat_treatment_event.rolling(window=treatment_duration,min_periods=1,center=False).sum()
     
-    # Create indicator for whether any event occurred in the past n years. 
+    # Create indicator for whether an event occurred in the past n years. 
     # This is used to determine treatment status. 
     under_treatment = (number_of_events > 0).astype(int)
+    under_repeat_treatment = (number_of_repeat_events > 0).astype(int)
     
     # Record the index position where a 1 occurs, NaN everywhere else, then forward fill
     idx_vals = np.arange(len(event_timeseries))
@@ -51,18 +55,26 @@ def evaluate_treatment_status(event_timeseries,calendar_time,treatment_duration)
     # Incorporate into relative time vector
     pre_treatment_mask = time_since_treatment_event.isna()
     time_since_treatment_event[pre_treatment_mask] = time_preceding_treatment_event[pre_treatment_mask]
+
+    # For repeat treatment events, create variable that tracks the time between the most recent event
+    # and the previous event
+    repeat_treatment_offset = (time_since_treatment_event.shift()+1).where(repeat_treatment_event==1)
+    repeat_treatment_offset = repeat_treatment_offset.ffill().where(under_repeat_treatment == 1)
     
     # Write to dataframe
     data = {'calendar_time':calendar_time,
             'treatment_event':event_timeseries,
+            'repeat_treatment_event': repeat_treatment_event.to_numpy(),
             'under_treatment':under_treatment.to_numpy(),
-            'treatment_overlap':multiple_events.to_numpy(),
+            'under_repeat_treatment':under_repeat_treatment.to_numpy(),
+            'repeat_treatment_offset':repeat_treatment_offset.to_numpy(),
             'time_since_treatment_event':time_since_treatment_event.to_numpy()}
     
     df = pd.DataFrame(data)
 
     # Cast as nullable int data type
     df['time_since_treatment_event'] = df['time_since_treatment_event'].astype('int64[pyarrow]')
+    df['repeat_treatment_offset'] = df['repeat_treatment_offset'].astype('int64[pyarrow]')
 
     # Set index as calendar time
     df.set_index('calendar_time',inplace=True)
