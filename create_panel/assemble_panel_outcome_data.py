@@ -112,6 +112,9 @@ colnames = ['first_obs','last_obs'] + colnames
 
 panel.columns = colnames
 
+# Specify loan vintage (year of origination)
+panel['vintage'] = panel['origdate'].dt.year
+
 # Create one row for each loan-year of observation
 panel['year'] = panel.apply(lambda x: np.arange(x['first_obs'].year,x['last_obs'].year+1),axis=1)
 panel = panel.explode('year').reset_index()
@@ -183,6 +186,7 @@ columns = ['masterloanidtrepp',
            'last_obs',
            'origdate',
            'maturitydate',
+           'vintage',
            'masterpropidtrepp',
            'cssaproptype',
            'propname',
