@@ -112,6 +112,9 @@ colnames = ['first_obs','last_obs'] + colnames
 
 panel.columns = colnames
 
+# Drop entries with missing data in key fields
+panel = panel.dropna(subset=['cssaproptype','origdate','first_obs','last_obs'])
+
 # Specify loan vintage (year of origination)
 panel['vintage'] = panel['origdate'].dt.year
 
@@ -173,9 +176,13 @@ panel = pd.merge(panel,building_attributes,on='masterloanidtrepp',how='inner')
 
 metro_areas_path = os.path.join(pwd,'metro_areas/county_metro_area_groupings.parquet')
 metro_areas = gpd.read_parquet(metro_areas_path).rename(columns={'GEOID':'countyfips_2022'})
-metro_areas = metro_areas[['countyfips_2022','group_code','group_name','group_type']]
+metro_areas = metro_areas[['countyfips_2022','csa_code','csa_title','cbsa_code','cbsa_title','cbsa_type']]
 
 panel = pd.merge(panel,metro_areas,on='countyfips_2022',how='left')
+
+# Drop properties located in areas outside CBSAs
+panel = panel.dropna(subset=['cbsa_code']).reset_index(drop=True)
+
 
 ### *** SAVE RESULTS *** ###
 
@@ -199,9 +206,11 @@ columns = ['masterloanidtrepp',
            'countyfips_2022',
            'censusblockgroup_2020',
            'zcta_2020',
-           'group_code',
-           'group_name',
-           'group_type',
+           'csa_code',
+           'csa_title',
+           'cbsa_code',
+           'cbsa_title',
+           'cbsa_type',
            'FEMA_100y_floodplain_indicator',
            'FEMA_500y_floodplain_indicator',
            'ever_D60',

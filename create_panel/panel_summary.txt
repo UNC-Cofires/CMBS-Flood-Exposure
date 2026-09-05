@@ -1,5 +1,5 @@
-Number of loans in panel: 90062
-Number of loan-years in panel: 804806
+Number of loans in panel: 89523
+Number of loan-years in panel: 800080
 
 Population rate of key fields:
     ever_D60: 99.9%
