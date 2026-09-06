@@ -17,14 +17,18 @@ project_root <- dirname(pwd)
 config_path <- file.path(project_root,"config.yaml")
 config <- read_yaml(config_path)
 
-# Get treatment status scenario to run
-scenario <- "base_case"
-nboots <- 200
+# Read command-line arguments
+args <- commandArgs(trailingOnly = TRUE)
+
+scenario <- args[1]
+proptype <- args[2]
+nboots <- as.integer(args[3])
+
 num_cores <- availableCores()
-print(glue("scenario={scenario}, nboots={nboots}, num_cores={num_cores}"))
+print(glue("scenario={scenario}, proptype={proptype}, nboots={nboots}, num_cores={num_cores}"))
 
 # Create folder for output
-outfolder <- file.path(pwd,glue("fitted_models/{scenario}"))
+outfolder <- file.path(pwd,glue("fitted_models/{scenario}/{proptype}"))
 dir.create(outfolder,recursive=TRUE)
 
 ### *** LOAD DATA *** ###
@@ -53,6 +57,13 @@ panel_data$log_rev <- log(pmax(panel_data$rev,1))
 panel_data$log_exp <- log(pmax(panel_data$exp,1))
 panel_data$log_noi <- log(pmax(panel_data$noi,1))
 
+### *** CREATE INDICATORS FOR MISSING FINANCIAL METRICS *** ###
+
+panel_data$missing_rev <- as.integer(is.na(panel_data$rev))
+panel_data$missing_exp <- as.integer(is.na(panel_data$exp))
+panel_data$missing_noi <- as.integer(is.na(panel_data$noi))
+panel_data$missing_occ <- as.integer(is.na(panel_data$occ))
+
 ### *** CREATE INTERACTION VARIABLES *** ###
 
 # Region x Time
@@ -61,7 +72,7 @@ panel_data$region_time <- interaction(panel_data$cbsa_title, panel_data$year)
 # Vintage x Time
 panel_data$vintage_time <- interaction(panel_data$vintage, panel_data$year)
 
-### *** SUBSET DATA BY PROPERTY TYPE *** ###
+### *** SUBSET DATA *** ###
 
 # For now, limit to properties inside the FEMA 100-year or 500-year floodplain. 
 # This reduces the number of observations (making models much faster to fit) and 
@@ -72,105 +83,91 @@ floodplain_mask <- (panel_data$FEMA_100y_floodplain_indicator == 1)|(panel_data$
 panel_data <- panel_data[floodplain_mask,]
 
 # Subset by property type of interest
-mf_data <- panel_data[panel_data$cssaproptype == "MF",]
-rt_data <- panel_data[panel_data$cssaproptype == "RT",]
+proptype_mask <- (panel_data$cssaproptype == proptype)
+panel_data <- panel_data[proptype_mask,]
 
 ### *** FIT MODELS *** ###
 
-## Multifamily Properties
+## Save input data
+saveRDS(panel_data, file=file.path(outfolder,glue("{proptype}_data.rds")))
 
-saveRDS(mf_data, file=file.path(outfolder,"mf_data.rds"))
+## Currently 60+ days delinquent
+D60_mod <- fect(D60 ~ under_treatment, data = panel_data,
+                index = c("masterloanidtrepp","year","region_time"),
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                keep.sims = TRUE)
 
-# Revenues
-mf_rev_mod <- fect(log_rev ~ under_treatment, data = mf_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
+saveRDS(D60_mod, file=file.path(outfolder,glue("{proptype}_D60_mod.rds")))
 
-saveRDS(mf_rev_mod, file=file.path(outfolder,"mf_rev_mod.rds"))
+## Ever 60+ days delinquent
+ever_D60_mod <- fect(ever_D60 ~ under_treatment, data = panel_data,
+                     index = c("masterloanidtrepp","year","region_time"),
+                     method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                     se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                     keep.sims = TRUE)
 
-# Expenses
-mf_exp_mod <- fect(log_exp ~ under_treatment, data = mf_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
+saveRDS(ever_D60_mod, file=file.path(outfolder,glue("{proptype}_ever_D60_mod.rds")))
 
-saveRDS(mf_exp_mod, file=file.path(outfolder,"mf_exp_mod.rds"))
+## Loss rate (100 x realized losses / original loan balance)
+loss_rate_mod <- fect(loss_rate ~ under_treatment, data = panel_data,
+                      index = c("masterloanidtrepp","year","region_time"),
+                      method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                      se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                      keep.sims = TRUE)
 
-# Net Operating Income
-mf_noi_mod <- fect(log_noi ~ under_treatment, data = mf_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
+saveRDS(loss_rate_mod, file=file.path(outfolder,glue("{proptype}_loss_rate_mod.rds")))
 
-saveRDS(mf_noi_mod, file=file.path(outfolder,"mf_noi_mod.rds"))
+## Revenues
+rev_mod <- fect(log_rev ~ under_treatment, data = panel_data,
+                index = c("masterloanidtrepp","year","region_time"),
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                keep.sims = TRUE)
 
-# Occupancy
-mf_occ_mod <- fect(occ ~ under_treatment, data = mf_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
+saveRDS(rev_mod, file=file.path(outfolder,glue("{proptype}_rev_mod.rds")))
 
-saveRDS(mf_occ_mod, file=file.path(outfolder,"mf_occ_mod.rds"))
+## Expenses
+exp_mod <- fect(log_exp ~ under_treatment, data = panel_data,
+                index = c("masterloanidtrepp","year","region_time"),
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                keep.sims = TRUE)
 
-# 60-day delinquency
-mf_D60_mod <- fect(ever_D60 ~ under_treatment, data = mf_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
+saveRDS(exp_mod, file=file.path(outfolder,glue("{proptype}_exp_mod.rds")))
 
-saveRDS(mf_D60_mod, file=file.path(outfolder,"mf_D60_mod.rds"))
+## Net operating income
+noi_mod <- fect(log_noi ~ under_treatment, data = panel_data,
+                index = c("masterloanidtrepp","year","region_time"),
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                keep.sims = TRUE)
 
-## Retail Properties
+saveRDS(noi_mod, file=file.path(outfolder,glue("{proptype}_noi_mod.rds")))
 
-saveRDS(rt_data, file=file.path(outfolder,"rt_data.rds"))
+## Occupancy
+occ_mod <- fect(occ ~ under_treatment, data = panel_data,
+                index = c("masterloanidtrepp","year","region_time"),
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                keep.sims = TRUE)
 
-# Revenues
-rt_rev_mod <- fect(log_rev ~ under_treatment, data = rt_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
+saveRDS(occ_mod, file=file.path(outfolder,glue("{proptype}_occ_mod.rds")))
 
-saveRDS(rt_rev_mod, file=file.path(outfolder,"rt_rev_mod.rds"))
+## Missing NOI
+miss_noi_mod <- fect(missing_noi ~ under_treatment, data = panel_data,
+                     index = c("masterloanidtrepp","year","region_time"),
+                     method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                     se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                     keep.sims = TRUE)
 
-# Expenses
-rt_exp_mod <- fect(log_exp ~ under_treatment, data = rt_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
+saveRDS(miss_noi_mod, file=file.path(outfolder,glue("{proptype}_miss_noi_mod.rds")))
 
-saveRDS(rt_exp_mod, file=file.path(outfolder,"rt_exp_mod.rds"))
+## Missing occupancy
+miss_occ_mod <- fect(missing_occ ~ under_treatment, data = panel_data,
+                     index = c("masterloanidtrepp","year","region_time"),
+                     method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                     se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
+                     keep.sims = TRUE)
 
-# Net Operating Income
-rt_noi_mod <- fect(log_noi ~ under_treatment, data = rt_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
-
-saveRDS(rt_noi_mod, file=file.path(outfolder,"rt_noi_mod.rds"))
-
-# Occupancy
-rt_occ_mod <- fect(occ ~ under_treatment, data = rt_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
-
-saveRDS(rt_occ_mod, file=file.path(outfolder,"rt_occ_mod.rds"))
-
-# 60-day delinquency
-rt_D60_mod <- fect(ever_D60 ~ under_treatment, data = rt_data,
-                   index = c("masterloanidtrepp","year","region_time"),
-                   method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                   se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                   keep.sims = TRUE)
-
-saveRDS(rt_D60_mod, file=file.path(outfolder,"rt_D60_mod.rds"))
+saveRDS(miss_occ_mod, file=file.path(outfolder,glue("{proptype}_miss_occ_mod.rds")))
