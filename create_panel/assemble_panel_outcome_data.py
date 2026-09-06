@@ -18,11 +18,10 @@ def evaluate_delinquency(df):
                  at different points in time. 
     """
 
-    D60 = (df['dlqderivedcd']=='2').astype('int64[pyarrow]').fillna(0)
-    D90 = (df['dlqderivedcd']=='3').astype('int64[pyarrow]').fillna(0)
-
-    df['ever_D60'] = D60.cumsum().clip(upper=1)
-    df['ever_D90'] = D90.cumsum().clip(upper=1)
+    df['D60'] = (df['dlqderivedcd']=='2').astype('int64[pyarrow]').fillna(0)
+    df['D90'] = (df['dlqderivedcd']=='3').astype('int64[pyarrow]').fillna(0)
+    df['ever_D60'] = df['D60'].cumsum().clip(upper=1)
+    df['ever_D90'] = df['D90'].cumsum().clip(upper=1)
     df['ever_in_foreclosure_or_REO'] = df['in_foreclosure_or_REO'].cumsum().clip(upper=1)
 
     return df
@@ -47,15 +46,19 @@ loan_usecols = ['masterloanidtrepp',
                 'distdate',
                 'origdate',
                 'maturitydate',
+                'origloanbal',
                 'obal',
                 'dlqderivedcd',
                 'prepaycd',
+                'realizedloss',
                 'propname',
                 'address',
                 'city',
                 'state',
                 'zip',
                 'cssaproptype',
+                'units',
+                'rentarea',
                 'priorfyasof',
                 'priorfyrev',
                 'priorfyexp',
@@ -72,6 +75,17 @@ prop = pd.read_parquet(prop_path,columns=prop_usecols)
 # Attach property status to loan file
 loans = pd.merge(loans,prop,on=['masterloanidtrepp','distdate'],how='left')
 
+## Evaluate realized losses to trust from each loan
+
+losses = loans[['masterloanidtrepp','distdate','origloanbal','realizedloss']]
+losses['year'] = losses['distdate'].dt.year
+
+agg_dict = {'origloanbal':'last',
+            'realizedloss':'last'}
+
+losses = losses.groupby(['masterloanidtrepp','year']).agg(agg_dict).reset_index()
+losses['loss_rate'] = 100*losses['realizedloss']/losses['origloanbal']
+
 ## Evaluate loan/property status
 
 # In foreclosure or REO
@@ -81,10 +95,13 @@ loans['in_foreclosure_or_REO'] = foreclosure_REO_mask.astype('int64[pyarrow]')
 # Defeased, released or substituted
 defeased_released_mask = loans['propstatus'].isin([3,4,5])
 
-# Paid off or prepaid
-zero_balance_mask = (loans['obal']==0)
+# Paid off, prepaid, or liquidated
+# (Still count loan as "active" during the first month where a zero balance shows up
+#  so that we can capture things like realized losses to the trust) 
+loans['zero_balance_flag'] = (loans['obal']==0).astype('int64[pyarrow]')
+zero_balance_mask = loans.groupby('masterloanidtrepp')['zero_balance_flag'].cumsum() > 1
 
-# Drop observations from after a loan is paid off or a property is defeased/released/substituted
+# Drop observations from after a loan is repaid/liquidated or a property is defeased/released/substituted
 active_mask = ~(defeased_released_mask|zero_balance_mask)
 loans = loans[active_mask]
 
@@ -96,13 +113,16 @@ loans = loans.groupby('masterloanidtrepp').apply(evaluate_delinquency).reset_ind
 agg_dict = {'distdate':['min','max'],
             'origdate':'last',
             'maturitydate':'last',
+            'origloanbal':'last',
             'masterpropidtrepp':'last',
             'propname':'last',
             'address':'last',
             'city':'last',
             'state':'last',
             'zip':'last',
-            'cssaproptype':'last'}
+            'cssaproptype':'last',
+            'units':'last',
+            'rentarea':'last'}
 
 panel = loans.groupby('masterloanidtrepp').agg(agg_dict)
 
@@ -124,18 +144,31 @@ panel = panel.explode('year').reset_index()
 
 ## Determine loan delinquency status in each year
 
-delinquency_status = loans[['masterloanidtrepp','distdate','ever_D60','ever_D90','ever_in_foreclosure_or_REO']]
+delinquency_status = loans[['masterloanidtrepp','distdate','D60','D90','in_foreclosure_or_REO','ever_D60','ever_D90','ever_in_foreclosure_or_REO']]
 delinquency_status['year'] = delinquency_status['distdate'].dt.year
-delinquency_status = delinquency_status.groupby(['masterloanidtrepp','year']).agg({'ever_D60':'max','ever_D90':'max','ever_in_foreclosure_or_REO':'max'}).reset_index()
+
+agg_dict = {'D60':'max',
+            'D90':'max',
+            'in_foreclosure_or_REO':'max',
+            'ever_D60':'max',
+            'ever_D90':'max',
+            'ever_in_foreclosure_or_REO':'max'}
+
+delinquency_status = delinquency_status.groupby(['masterloanidtrepp','year']).agg(agg_dict).reset_index()
 
 # Sometimes a loan won't be marked as delinquent in the Trepp data until it is already D90+. 
 # We know that in these situations, it must have been 60 days delinquent at some point in time.  
-# Update delinquency fields so that D60 >= D90 >= foreclosed/REO at all timepoints.  
+# Update delinquency fields so that D60 >= D90 >= foreclosed/REO at all timepoints.
+delinquency_status['D60'] = (delinquency_status['D60'] + delinquency_status['D90'] + delinquency_status['in_foreclosure_or_REO']).clip(upper=1)
+delinquency_status['D90'] = (delinquency_status['D90'] + delinquency_status['in_foreclosure_or_REO']).clip(upper=1)
 delinquency_status['ever_D60'] = (delinquency_status['ever_D60'] + delinquency_status['ever_D90'] + delinquency_status['ever_in_foreclosure_or_REO']).clip(upper=1)
 delinquency_status['ever_D90'] = (delinquency_status['ever_D90'] + delinquency_status['ever_in_foreclosure_or_REO']).clip(upper=1)
 
 # Attach to panel data
 panel = pd.merge(panel,delinquency_status,on=['masterloanidtrepp','year'],how='left')
+
+# Also attach information on realized losses
+panel = pd.merge(panel,losses[['masterloanidtrepp','year','realizedloss','loss_rate']],on=['masterloanidtrepp','year'],how='left')
 
 ## Determine property revenues, expenses, noi, and occupancy in each year
 
@@ -163,12 +196,13 @@ agg_dict = {'LATITUDE':'first',
             'countyfips_2022':'first',
             'censusblockgroup_2020':'first',
             'zcta_2020':'first',
+            'BUILD_ID':'count',
             'FEMA_100y_floodplain_indicator':'max',
             'FEMA_500y_floodplain_indicator':'max'}
 
 building_attributes = buildings.groupby('masterloanidtrepp').agg(agg_dict)
 building_attributes['FEMA_500y_floodplain_indicator'] = ((building_attributes['FEMA_500y_floodplain_indicator']==1)&(building_attributes['FEMA_100y_floodplain_indicator']==0)).astype(int)
-building_attributes = building_attributes.rename(columns={'LATITUDE':'latitude','LONGITUDE':'longitude'}).reset_index()
+building_attributes = building_attributes.rename(columns={'LATITUDE':'latitude','LONGITUDE':'longitude','BUILD_ID':'num_structures'}).reset_index()
 
 panel = pd.merge(panel,building_attributes,on='masterloanidtrepp',how='inner')
 
@@ -183,7 +217,6 @@ panel = pd.merge(panel,metro_areas,on='countyfips_2022',how='left')
 # Drop properties located in areas outside CBSAs
 panel = panel.dropna(subset=['cbsa_code']).reset_index(drop=True)
 
-
 ### *** SAVE RESULTS *** ###
 
 # Reorder columns
@@ -192,10 +225,14 @@ columns = ['masterloanidtrepp',
            'first_obs',
            'last_obs',
            'origdate',
+           'origloanbal',
            'maturitydate',
            'vintage',
            'masterpropidtrepp',
            'cssaproptype',
+           'units',
+           'rentarea',
+           'num_structures',
            'propname',
            'address',
            'city',
@@ -213,9 +250,14 @@ columns = ['masterloanidtrepp',
            'cbsa_type',
            'FEMA_100y_floodplain_indicator',
            'FEMA_500y_floodplain_indicator',
+           'D60',
+           'D90',
+           'in_foreclosure_or_REO',
            'ever_D60',
            'ever_D90',
            'ever_in_foreclosure_or_REO',
+           'realizedloss',
+           'loss_rate',
            'rev',
            'exp',
            'noi',
@@ -236,7 +278,20 @@ print(f'Number of loans in panel: {num_loans}')
 print(f'Number of loan-years in panel: {num_loan_years}\n')
 print('Population rate of key fields:')
 
-fields = ['ever_D60','ever_D90','ever_in_foreclosure_or_REO','rev','exp','noi','occ']
+fields = ['D60',
+          'D90',
+          'in_foreclosure_or_REO',
+          'ever_D60',
+          'ever_D90',
+          'ever_in_foreclosure_or_REO',
+          'realizedloss',
+          'loss_rate',
+          'rev',
+          'exp',
+          'noi',
+          'occ']
+
+
 for field in fields:
     pop_rate = (~panel[field].isna()).mean()
     print(f'    {field}: {100*pop_rate:.1f}%')

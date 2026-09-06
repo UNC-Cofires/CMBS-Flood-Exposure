@@ -1,11 +1,16 @@
-Number of loans in panel: 89523
-Number of loan-years in panel: 800080
+Number of loans in panel: 89535
+Number of loan-years in panel: 805166
 
 Population rate of key fields:
+    D60: 99.9%
+    D90: 99.9%
+    in_foreclosure_or_REO: 99.9%
     ever_D60: 99.9%
     ever_D90: 99.9%
     ever_in_foreclosure_or_REO: 99.9%
-    rev: 76.9%
-    exp: 75.8%
-    noi: 76.6%
-    occ: 71.5%
+    realizedloss: 100.0%
+    loss_rate: 97.1%
+    rev: 76.8%
+    exp: 75.7%
+    noi: 76.5%
+    occ: 71.2%
