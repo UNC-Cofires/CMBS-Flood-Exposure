@@ -112,7 +112,13 @@ usecols = ['dosname',
            'numnotes',
            'acrossdealsloanidtrepp',
            'loanindeals',
-           'curwholeloanbal']
+           'curwholeloanbal',
+           'derivedLoanStatus',
+           'newlyDq',
+           'newlySpecServ',
+           'newlyWatchlist',
+           'lossamount',
+           'calclosspct']
 
 loan2_dir = os.path.join(config['paths']['trepp_data_dir'],'loan2')
 loan2_filepaths = [os.path.join(loan2_dir,x) for x in np.sort(os.listdir(loan2_dir))]
