@@ -12,8 +12,15 @@
 module purge
 module load r/4.5.0
 
+# Baseline model (stratified by property type)
 Rscript baseline_model.R "base_case" "MF" 200
 Rscript baseline_model.R "base_case" "RT" 200
 Rscript baseline_model.R "base_case" "OF" 200
 Rscript baseline_model.R "base_case" "IN" 200
 Rscript baseline_model.R "base_case" "LO" 200
+Rscript postprocess_baseline_model.R "base_case" "MF"
+Rscript postprocess_baseline_model.R "base_case" "RT"
+Rscript postprocess_baseline_model.R "base_case" "OF"
+Rscript postprocess_baseline_model.R "base_case" "IN"
+Rscript postprocess_baseline_model.R "base_case" "LO"
+
