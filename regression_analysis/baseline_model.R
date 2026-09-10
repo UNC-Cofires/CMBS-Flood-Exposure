@@ -21,14 +21,15 @@ config <- read_yaml(config_path)
 args <- commandArgs(trailingOnly = TRUE)
 
 scenario <- args[1]
-proptype <- args[2]
-nboots <- as.integer(args[3])
+floodzone <- args[2]
+proptype <- args[3]
+nboots <- as.integer(args[4])
 
 num_cores <- availableCores()
-print(glue("scenario={scenario}, proptype={proptype}, nboots={nboots}, num_cores={num_cores}"))
+print(glue("scenario={scenario}, floodzone={floodzone}, proptype={proptype}, nboots={nboots}, num_cores={num_cores}"))
 
 # Create folder for output
-outfolder <- file.path(pwd,glue("fitted_models/{scenario}/{proptype}"))
+outfolder <- file.path(pwd,glue("fitted_models/{scenario}/{floodzone}/{proptype}"))
 dir.create(outfolder,recursive=TRUE)
 
 ### *** LOAD DATA *** ###
@@ -74,13 +75,20 @@ panel_data$vintage_time <- interaction(panel_data$vintage, panel_data$year)
 
 ### *** SUBSET DATA *** ###
 
-# For now, limit to properties inside the FEMA 100-year or 500-year floodplain. 
-# This reduces the number of observations (making models much faster to fit) and 
-# is also likely to be where we see the strongest effects. 
-# Eventually will fit models for properties outside the floodplain as well
-# once we're done debugging. 
+# Subset by inside/outside FEMA 100-year and 500-year floodplain
 floodplain_mask <- (panel_data$FEMA_100y_floodplain_indicator == 1)|(panel_data$FEMA_500y_floodplain_indicator == 1)
-panel_data <- panel_data[floodplain_mask,]
+
+if (floodzone == "inside") {
+  
+  # Filter for properties inside FEMA floodplains
+  panel_data <- panel_data[floodplain_mask,]
+  
+} else if (floodzone == "outside") {
+  
+  # Filter for properties outside FEMA floodplains
+  panel_data <- panel_data[!floodplain_mask,]
+  
+}
 
 # Subset by property type of interest
 proptype_mask <- (panel_data$cssaproptype == proptype)

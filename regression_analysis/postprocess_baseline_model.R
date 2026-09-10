@@ -118,13 +118,14 @@ config <- read_yaml(config_path)
 # Get scenario and property type
 args <- commandArgs(trailingOnly = TRUE)
 scenario <- args[1]
-proptype <- args[2]
+floodzone <- args[2]
+proptype <- args[3]
 
-print(glue("scenario={scenario}, proptype={proptype}"))
+print(glue("scenario={scenario}, floodzone={floodzone}, proptype={proptype}"))
 
 ### *** LOAD FITTED MODELS AND DATA *** ###
 
-fitted_dir <- file.path(pwd,glue("fitted_models/{scenario}/{proptype}"))
+fitted_dir <- file.path(pwd,glue("fitted_models/{scenario}/{floodzone}/{proptype}"))
 
 panel_data <- readRDS(file.path(fitted_dir,glue("{proptype}_data.rds")))
 D60_mod <- readRDS(file.path(fitted_dir,glue("{proptype}_D60_mod.rds")))
