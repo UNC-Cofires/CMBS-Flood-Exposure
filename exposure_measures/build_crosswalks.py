@@ -100,6 +100,12 @@ bg2020_tr2010_crosswalk = create_one_to_one_crosswalk(buildings,'censusblockgrou
 # 2000 block groups to 2010 tracts
 bg2000_tr2010_crosswalk = create_one_to_one_crosswalk(buildings,'censusblockgroup_2000','censustract_2010')
 
+# 2010 block groups to 2020 tracts
+bg2010_tr2020_crosswalk = create_one_to_one_crosswalk(buildings,'censusblockgroup_2010','censustract_2020')
+
+# 2000 block groups to 2020 tracts
+bg2000_tr2020_crosswalk = create_one_to_one_crosswalk(buildings,'censusblockgroup_2000','censustract_2020')
+
 ### *** SAVE RESULTS *** ###
 
 # Save as parquet
@@ -109,9 +115,21 @@ bg2020_tr2010_crosswalk.to_parquet(outname)
 outname = os.path.join(outfolder,'bg2000_tr2010_crosswalk.parquet')
 bg2000_tr2010_crosswalk.to_parquet(outname)
 
+outname = os.path.join(outfolder,'bg2010_tr2020_crosswalk.parquet')
+bg2010_tr2020_crosswalk.to_parquet(outname)
+
+outname = os.path.join(outfolder,'bg2000_tr2020_crosswalk.parquet')
+bg2000_tr2020_crosswalk.to_parquet(outname)
+
 # And as CSV
 outname = os.path.join(outfolder,'bg2020_tr2010_crosswalk.csv')
 bg2020_tr2010_crosswalk.to_csv(outname,index=False)
 
 outname = os.path.join(outfolder,'bg2000_tr2010_crosswalk.csv')
 bg2000_tr2010_crosswalk.to_csv(outname,index=False)
+
+outname = os.path.join(outfolder,'bg2010_tr2020_crosswalk.csv')
+bg2010_tr2020_crosswalk.to_csv(outname,index=False)
+
+outname = os.path.join(outfolder,'bg2000_tr2020_crosswalk.csv')
+bg2000_tr2020_crosswalk.to_csv(outname,index=False)
