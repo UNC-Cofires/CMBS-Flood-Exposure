@@ -15,11 +15,17 @@ paths:
   censusblockgroups_2010: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_blockgroups/2010_census_blockgroups"
   censusblockgroups_2020: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_blockgroups/2020_census_blockgroups"
   zctas_2020: "/proj/characklab/projects/kieranf/flood_damage_index/data/geospatial_data/census_ZCTAs/tl_2020_us_zcta520"
+  censustracts_2010: "/proj/characklab/projects/kieranf/CMBS/data/census_bureau/censustract_2010"
+  csa_cbsa_delineations: "/proj/characklab/projects/kieranf/CMBS/data/census_bureau/CSA_CBSA_delineations/csa_cbsa_delineations.xlsx"
+  openfema_policies: "/proj/characklab/projects/kieranf/OpenFEMA/NfipPoliciesV3.parquet"
+  openfema_claims: "/proj/characklab/projects/kieranf/OpenFEMA/NfipClaimsV3.parquet"
+  claim_clusters: "/proj/characklab/projects/kieranf/flood_damage_index/data/from_LH/FimaNfipClaimsV2_CLUSTERED.csv"
+  fema_damage_assessments: "/proj/characklab/projects/kieranf/CMBS/data/FEMA/damage_assessments/historical_damage_assessments/FEMA_historical_damage_assessements.csv"
 api_info:
   # API parameters and keys required to access APIs used in project
-  edgar_user_agent: "Kieran Fitzmason kfitzmason@unc.edu"
-  mediacloud_api_key: "my_api_key"
-  here_geocoding_api_key: "my_api_key"
+  edgar_user_agent: "Firstname Lastname onyen@unc.edu"
+  mediacloud_api_key: "abc123"
+  here_geocoding_api_key: "abc123"
 gis_params:
   # Coordinate reference systems and other GIS-related parameters
   geographic_crs: "EPSG:4326"
