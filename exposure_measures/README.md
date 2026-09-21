@@ -11,7 +11,7 @@ Each step includes a Python script (`.py`) and a corresponding SLURM batch scrip
 ### Step 1 — `build_crosswalks` (.py / .sh)
 Constructs one-to-one geographic crosswalks between census block groups and census tracts across different decennial vintages (2000, 2010, 2020). For each source block group, the target tract is selected by maximizing the number of buildings with overlapping assignments, using building footprint data from the geocoding pipeline. All crosswalks are saved as both Parquet and CSV files.
 
-**Prerequisite:** Requires `structure_info/` output from the geocoding pipeline.
+**Prerequisite:** Requires `structure_info/` output from [Step 10](https://github.com/UNC-Cofires/CMBS-Flood-Exposure/tree/main/geocoding#step-10--attach_info_to_structures-py--sh) of the geocoding pipeline.
 
 **Output** (`crosswalks/`):
 - `bg2020_tr2010_crosswalk` — 2020 block groups → 2010 tracts
