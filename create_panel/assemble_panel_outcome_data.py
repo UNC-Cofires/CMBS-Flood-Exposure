@@ -187,14 +187,19 @@ panel = panel[study_period_mask].reset_index(drop=True)
 
 ### *** ATTACH BUILDING ATTRIBUTES *** ###
 
+# Load buildings
 buildings_path = os.path.join(project_root,'geocoding/property_geospatial_data/matched_buildings')
 buildings = gpd.read_parquet(buildings_path)
 buildings = buildings.sort_values(by=['masterloanidtrepp','direct_match','SQMETERS'],ascending=False)
 
+# Create census tract variable
+buildings['censustract_2010'] = buildings['censusblockgroup_2010'].map(lambda x: x[:11], na_action='ignore')
+
+# Aggregate attributes from structures associated with a given property
 agg_dict = {'LATITUDE':'first',
             'LONGITUDE':'first',
             'countyfips_2022':'first',
-            'censusblockgroup_2020':'first',
+            'censustract_2010':'first',
             'zcta_2020':'first',
             'BUILD_ID':'count',
             'FEMA_100y_floodplain_indicator':'max',
@@ -241,7 +246,7 @@ columns = ['masterloanidtrepp',
            'latitude',
            'longitude',
            'countyfips_2022',
-           'censusblockgroup_2020',
+           'censustract_2010',
            'zcta_2020',
            'csa_code',
            'csa_title',
