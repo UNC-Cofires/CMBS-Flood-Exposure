@@ -11,6 +11,8 @@ Each step includes a Python script (`.py`) and a corresponding SLURM batch scrip
 ### Step 1 — `create_address_list` (.py / .sh)
 Extracts loan-level address fields (property name, address, city, state, zip) from the filtered loans dataset and saves a deduplicated address list for use in subsequent steps.
 
+**Prerequisites:** Requires output from [Step 1](https://github.com/UNC-Cofires/CMBS-Flood-Exposure/tree/main/create_panel#step-1--filter_loans-and-filter_properties-py--sh) of the panel data pipeline.
+
 **Output:** `geocoding_input/filtered_loans_address_data.parquet`
 
 ---
