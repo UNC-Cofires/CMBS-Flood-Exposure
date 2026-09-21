@@ -22,7 +22,16 @@ Constructs one-to-one geographic crosswalks between census block groups and cens
 ---
 
 ### Step 2 — `calculate_claim_rate` (.py / .sh)
-Calculates annual NFIP flood claim rates at the 2010 census tract level. OpenFEMA policy and claim records report census block group GEOIDs without specifying the decennial vintage; this script infers the most likely vintage for each record year by comparing match rates against 2000, 2010, and 2020 block group GEOIDs. Records are then mapped to 2010 census tracts using the crosswalks from Step 1. Claim rates are expressed as claims per policy-year, where policy-year is derived from the daily count of policies in force aggregated to the tract-year level.
+
+Calculates annual NFIP claim rates at the 2010 census tract level. OpenFEMA policy and claim records report census block group GEOIDs without specifying the decennial vintage, so the vintage of each record must be inferred before it can be mapped to a 2010 tract.
+
+Vintage inference proceeds as follows:
+
+1. For each record year (determined by claim date or policy effective date), the match rate between OpenFEMA GEOIDs and the universe of block group GEOIDs from each census vintage (2000, 2010, 2020) is calculated.
+2. The three vintages are ranked from highest to lowest match rate for each record year, reflecting which census geography was most commonly used during that period.
+3. For each individual record, the script attempts to match its GEOID to the highest-ranked vintage first. If a match is found, that vintage is assigned. If not, it falls back to the second-ranked vintage, then the third. Records that do not match any vintage are assigned a missing vintage.
+
+Once vintages are assigned, records are mapped to 2010 census tracts using the crosswalks from Step 1. Claim rates are expressed as claims per policy-year, where policy-year is derived from the daily count of policies in force aggregated to the tract-year level.
 
 **Output:**
 - `NFIP_claim_rate_by_tract.parquet` — annual claim rate per policy-year by 2010 census tract
