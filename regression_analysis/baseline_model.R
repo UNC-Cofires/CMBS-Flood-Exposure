@@ -38,15 +38,15 @@ dir.create(outfolder,recursive=TRUE)
 panel_data_path <- file.path(project_root,"create_panel/panel_outcome_data.parquet")
 panel_data <- read_parquet(panel_data_path)
 
-# Zipcode-level treatment status
-treatment_status_dir <- file.path(project_root,"exposure_measures/zipcode_exposure")
-treatment_status_filename <- glue("zipcode_treatment_status_{scenario}.parquet")
+# Tract-level treatment status
+treatment_status_dir <- file.path(project_root,"exposure_measures/tract_exposure")
+treatment_status_filename <- glue("{scenario}_treatment_status.parquet")
 treatment_status_path <- file.path(treatment_status_dir,treatment_status_filename)
 treatment_status <- read_parquet(treatment_status_path)
-treatment_status <- treatment_status %>% rename(zcta_2020 = zipcode, year = calendar_time)
+treatment_status <- treatment_status %>% rename(year = calendar_time)
 
 # Merge outcome and treatment status data
-panel_data <- left_join(panel_data, treatment_status, by = c("zcta_2020","year"))
+panel_data <- left_join(panel_data, treatment_status, by = c("censustract_2010","year"))
 
 ### *** LOG-TRANSFORM PROPERTY CASHFLOW MEAURES *** ###
 
