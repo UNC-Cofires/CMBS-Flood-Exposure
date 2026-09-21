@@ -18,7 +18,7 @@ Both scripts are run sequentially by `filter_loans.sh` and should be submitted t
 3. **Single-note** — excludes loans that are part of a multi-note capital structure (e.g., A/B note splits, pari passu notes)
 4. **Included states** — excludes loans collateralized by properties outside the list of included states
 
-A stepwise selection flow is printed to `selection_flow.txt`. Of 111,647 starting loans, 96,753 (86.66%) meet all four criteria.
+A stepwise selection flow is printed to `selection_flow.txt`.
 
 **`filter_properties.py`** then retrieves all Trepp property records associated with the filtered loans and saves them as a separate file.
 
