@@ -37,7 +37,7 @@ Assigns Core-Based Statistical Area (CBSA) and Combined Statistical Area (CSA) c
 ---
 
 ### Step 3 — `assemble_panel_outcome_data` (.py / .sh)
-Constructs a balanced loan-year panel for the study period (1998–2025) and attaches property-level outcomes and attributes. The script performs the following operations:
+Constructs a loan-year panel for the study period (1998–2025) and attaches property-level outcomes and attributes. The script performs the following operations:
 
 - **Delinquency outcomes** — derives indicators for 60-day delinquency (D60), 90-day delinquency (D90), and foreclosure/REO status, as well as "ever" versions of each that flag whether a loan has reached a given delinquency threshold at any prior point in time. Entries where a loan skips directly to D90+ without a recorded D60 are corrected so that delinquency thresholds are always nested (D60 ≥ D90 ≥ foreclosure/REO).
 - **Realized losses** — attaches annual realized loss amounts and loss rates (as a percentage of original loan balance).
