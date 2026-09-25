@@ -92,63 +92,65 @@ config = load_config()
 pwd = os.getcwd()
 
 # Create folder for output
-outfolder = os.path.join(pwd,'tract_exposure')
+outfolder = os.path.join(pwd,'treatment_status')
 os.makedirs(outfolder,exist_ok=True)
 
 # Get command-line arguments
 claim_rate_path = sys.argv[1]
-claim_rate_threshold = float(sys.argv[2])
-treatment_duration = int(sys.argv[3])
-scenario_name = sys.argv[4]
+geog_unit = sys.argv[2]
+neighbor_graph = sys.argv[3]
+claim_rate_threshold = float(sys.argv[4])
+treatment_duration = int(sys.argv[5])
+scenario_name = sys.argv[6]
 
 # Describe key inputs used to determine treatment status
 treatment_description = f'scenario={scenario_name}, claim_rate_threshold={claim_rate_threshold}, treatment_duration={treatment_duration}, claim_rate_path={claim_rate_path}'
 
-# Load data on claim rate by tract
+# Load data on claim rate by geographic unit
 claim_rate = pd.read_parquet(claim_rate_path)
 claim_rate['claimRate'] = claim_rate['claimRate'].fillna(0)
 
-# Load data on spatial neighbor relationships between tracts
-neighboring_tracts = pd.read_parquet(config['paths']['tract_neighbors'])
+# Load data on spatial neighbor relationships between geographic units
+neighboring_units = pd.read_parquet(config['paths'][neighbor_graph])
 
-### *** EVALUATE TREATMENT STATUS OF FLOOD-EXPOSED TRACTS *** ###
+### *** EVALUATE TREATMENT STATUS OF FLOOD-EXPOSED UNITS *** ###
 
-# Define an "event" as any year in which the tract-level claim rate exceeds a set threshold
+# Define an "event" as any year in which an area's claim rate exceeds a set threshold
 claim_rate['flood_event'] = (claim_rate['claimRate'] > claim_rate_threshold).astype(int)
 
 # Evaluate treatment status over time under repeated treatment
-treatment_status = claim_rate.groupby('censustract_2010').apply(lambda x: evaluate_treatment_status(x['flood_event'],x['year'],treatment_duration))
+treatment_status = claim_rate.groupby(geog_unit).apply(lambda x: evaluate_treatment_status(x['flood_event'],x['year'],treatment_duration))
 treatment_status = treatment_status.reset_index()
 treatment_status['treatment_description'] = treatment_description
 
-### *** EVALUATE SPILLOVER STATUS OF NEIGHBORS OF FLOOD-EXPOSED TRACTS *** ###
+### *** EVALUATE SPILLOVER STATUS OF NEIGHBORS OF FLOOD-EXPOSED UNITS *** ###
 
-# Represent neighbor relationships between tracts as undirected graph
-tract_graph = nx.Graph()
-tract_graph.add_nodes_from(treatment_status['censustract_2010'].unique())
-tract_graph.add_edges_from(neighboring_tracts.to_numpy())
+# Represent neighbor relationships between units as undirected graph
+neighbor_graph = nx.Graph()
+neighbor_graph.add_nodes_from(treatment_status[geog_unit].unique())
+neighbor_graph.add_edges_from(neighboring_units.to_numpy())
 
-# Get list of flood events by tract/time
-flood_events = treatment_status[['calendar_time','censustract_2010','treatment_event']]
+# Get list of flood events by geographic unit / time
+flood_events = treatment_status[['calendar_time',geog_unit,'treatment_event']]
 flood_events = flood_events[flood_events['treatment_event']==1].rename(columns={'calendar_time':'year'})
 
-# Determine which tracts were neighbors to a flooded tract
-flood_events['neighbors'] = flood_events['censustract_2010'].apply(lambda x: list(tract_graph.neighbors(x)))
+# Determine which units were neighbors to a flooded unit
+flood_events['neighbors'] = flood_events[geog_unit].apply(lambda x: list(neighbor_graph.neighbors(x)))
 neighbor_events = flood_events[['year','neighbors']].explode('neighbors').drop_duplicates()
-neighbor_events = neighbor_events.rename(columns={'neighbors':'censustract_2010','calendar_time':'year'})
+neighbor_events = neighbor_events.rename(columns={'neighbors':geog_unit,'calendar_time':'year'})
 neighbor_events['neighbor_flood_event'] = 1
 
-# Exclude entries where the tract itself was also flooded
-neighbor_events = pd.merge(neighbor_events,flood_events.drop(columns=['neighbors']),on=['censustract_2010','year'],how='left').fillna(0)
+# Exclude entries where the unit itself was also flooded
+neighbor_events = pd.merge(neighbor_events,flood_events.drop(columns=['neighbors']),on=[geog_unit,'year'],how='left').fillna(0)
 neighbor_events = neighbor_events[neighbor_events['treatment_event']==0]
 neighbor_events = neighbor_events.drop(columns=['treatment_event'])
 
 # Record years where no neighbors experience flood events
-neighbor_events = pd.merge(claim_rate[['censustract_2010','year']],neighbor_events,on=['censustract_2010','year'],how='left').fillna(0)
+neighbor_events = pd.merge(claim_rate[[geog_unit,'year']],neighbor_events,on=[geog_unit,'year'],how='left').fillna(0)
 neighbor_events['neighbor_flood_event'] = neighbor_events['neighbor_flood_event'].astype(int)
 
-# Evaluate spillover status over time for neighbors of flooded tracts
-spillover_status = neighbor_events.groupby('censustract_2010').apply(lambda x: evaluate_treatment_status(x['neighbor_flood_event'],x['year'],treatment_duration))
+# Evaluate spillover status over time for neighbors of flooded units
+spillover_status = neighbor_events.groupby(geog_unit).apply(lambda x: evaluate_treatment_status(x['neighbor_flood_event'],x['year'],treatment_duration))
 spillover_status = spillover_status.reset_index()
 
 # Rename columns to distinguish treatment from spillover
@@ -159,7 +161,7 @@ for col in spillover_status:
 
 ### *** COMBINE TREATMENT / SPILLOVER MEASURES *** ###
 
-treatment_status = pd.merge(treatment_status,spillover_status,on=['censustract_2010','calendar_time'],how='left')
+treatment_status = pd.merge(treatment_status,spillover_status,on=[geog_unit,'calendar_time'],how='left')
 
 ### *** SAVE RESULTS *** ###
 
