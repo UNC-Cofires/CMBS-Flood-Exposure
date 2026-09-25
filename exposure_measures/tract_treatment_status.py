@@ -95,7 +95,7 @@ pwd = os.getcwd()
 outfolder = os.path.join(pwd,'tract_exposure')
 os.makedirs(outfolder,exist_ok=True)
 
-# Get command-line arguments # (!) update once debugged
+# Get command-line arguments
 claim_rate_path = sys.argv[1]
 claim_rate_threshold = float(sys.argv[2])
 treatment_duration = int(sys.argv[3])

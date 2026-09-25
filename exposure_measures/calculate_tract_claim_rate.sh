@@ -18,4 +18,4 @@ source "$PROJECT_ROOT/config.sh"
 
 conda activate $CRE_CONDA_ENV_PATH
 
-python3.12 calculate_claim_rate.py
+python3.12 calculate_tract_claim_rate.py
