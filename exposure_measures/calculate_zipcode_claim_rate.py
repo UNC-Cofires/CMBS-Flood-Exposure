@@ -124,5 +124,8 @@ zipcode_df['claimRate'] = zipcode_df['claimCount'] / zipcode_df['policyYears']
 
 ### *** SAVE RESULTS *** ###
 
-outname = os.path.join(pwd,'NFIP_claim_rate_by_zipcode.parquet')
-zipcode_df.to_parquet(outname)
+# Rename zipcode column for integration with other datasets
+zipcode_df.rename(columns={'reportedZipCode':'zipcode'}, inplace=True)
+
+# Save file
+zipcode_df.to_parquet('NFIP_claim_rate_by_zipcode.parquet')
