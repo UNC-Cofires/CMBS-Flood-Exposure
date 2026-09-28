@@ -25,3 +25,12 @@ python3.12 treatment_status.py "NFIP_claim_rate_by_zipcode.parquet" "zipcode" "z
 python3.12 treatment_status.py "NFIP_claim_rate_by_zipcode.parquet" "zipcode" "zcta_neighbors" 0.10 3 "zipcode_shorter_duration"
 python3.12 treatment_status.py "NFIP_claim_rate_by_zipcode.parquet" "zipcode" "zcta_neighbors" 0.10 7 "zipcode_longer_duration"
 
+# Gridcell-level flood treatment exposure
+python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.10 5 "gridcell_base_case"
+python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.05 5 "gridcell_lower_threshold"
+python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.20 5 "gridcell_higher_threshold"
+python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.10 3 "gridcell_shorter_duration"
+python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.10 3 "gridcell_longer_duration"
+
+
+
