@@ -206,9 +206,12 @@ agg_dict = {'LATITUDE':'first',
             'FEMA_500y_floodplain_indicator':'max'}
 
 building_attributes = buildings.groupby('masterloanidtrepp').agg(agg_dict)
+
 building_attributes['FEMA_500y_floodplain_indicator'] = ((building_attributes['FEMA_500y_floodplain_indicator']==1)&(building_attributes['FEMA_100y_floodplain_indicator']==0)).astype(int)
 building_attributes['floodzone'] = pd.from_dummies(building_attributes[['FEMA_100y_floodplain_indicator','FEMA_500y_floodplain_indicator']],default_category='outside_FEMA_floodplains')
 building_attributes['floodzone'] = building_attributes['floodzone'].str.replace('_indicator','')
+building_attributes['lumped_floodzone'] = building_attributes['floodzone'].apply(lambda x: 'inside_FEMA_floodplains' if x != 'outside_FEMA_floodplains' else x)
+
 building_attributes = building_attributes.rename(columns={'LATITUDE':'latitude','LONGITUDE':'longitude','BUILD_ID':'num_structures'}).reset_index()
 
 panel = pd.merge(panel,building_attributes,on='masterloanidtrepp',how='inner')
@@ -266,6 +269,7 @@ columns = ['masterloanidtrepp',
            'FEMA_100y_floodplain_indicator',
            'FEMA_500y_floodplain_indicator',
            'floodzone',
+           'lumped_floodzone',
            'D60',
            'D90',
            'in_foreclosure_or_REO',
