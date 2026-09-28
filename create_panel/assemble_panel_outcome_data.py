@@ -211,6 +211,9 @@ building_attributes = building_attributes.rename(columns={'LATITUDE':'latitude',
 
 panel = pd.merge(panel,building_attributes,on='masterloanidtrepp',how='inner')
 
+# Create 0.1 x 0.1 degree lat/lon gridcell identifier
+panel['gridcell'] = panel['latitude'].apply(lambda x: f'{x:0.1f}') + ',' + panel['longitude'].apply(lambda x: f'{x:0.1f}')
+
 ### *** ATTACH COUNTY METRO AREA GROUPINGS *** ###
 
 metro_areas_path = os.path.join(pwd,'metro_areas/county_metro_area_groupings.parquet')
@@ -223,6 +226,10 @@ panel = pd.merge(panel,metro_areas,on='countyfips_2022',how='left')
 panel = panel.dropna(subset=['cbsa_code']).reset_index(drop=True)
 
 ### *** SAVE RESULTS *** ###
+
+# Rename columns
+rename_dict = {'zcta_2020':'zipcode'}
+panel.rename(columns=rename_dict, inplace=True)
 
 # Reorder columns
 columns = ['masterloanidtrepp',
@@ -245,9 +252,10 @@ columns = ['masterloanidtrepp',
            'zip',
            'latitude',
            'longitude',
+           'gridcell',
            'countyfips_2022',
            'censustract_2010',
-           'zcta_2020',
+           'zipcode',
            'csa_code',
            'csa_title',
            'cbsa_code',
