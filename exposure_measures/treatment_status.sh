@@ -30,7 +30,7 @@ python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" 
 python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.05 5 "gridcell_lower_threshold"
 python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.20 5 "gridcell_higher_threshold"
 python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.10 3 "gridcell_shorter_duration"
-python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.10 3 "gridcell_longer_duration"
+python3.12 treatment_status.py "NFIP_claim_rate_by_gridcell.parquet" "gridcell" "gridcell_neighbors" 0.10 7 "gridcell_longer_duration"
 
 
 
