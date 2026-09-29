@@ -181,7 +181,6 @@ repeated_treatment_effects <- function(mod,
     group_post_treatment$ci.hi <- group_post_treatment$estimate + z*group_post_treatment$se
     
     # Join to overall estimates
-    group_post_treatment <- rename(group_post_treatment)
     post_treatment <- bind_rows(post_treatment,group_post_treatment)
   }
   
