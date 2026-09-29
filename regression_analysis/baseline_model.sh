@@ -3,50 +3,33 @@
 #SBATCH -p general
 #SBATCH -N 1
 #SBATCH -n 8
-#SBATCH --mem=150g
-#SBATCH -t 3-00:00:00
+#SBATCH --mem=200g
+#SBATCH -t 2-00:00:00
 #SBATCH --mail-type=all
 #SBATCH --job-name=baseline_model
 #SBATCH --mail-user=kieranf@email.unc.edu
+#SBATCH --array=0,1
 
 module purge
 module load r/4.5.0
 
+# List of property types
+PROPTYPES=("MF","RT","OF","IN","LO")
+
+# Specific property type to run
+PROPTYPE=${PROPTYPES[$SLURM_ARRAY_TASK_ID]}
+
 # Number of bootstrap replicates drawn when computing SEs
 NBOOT=500
 
-# Baseline model - Properties inside FEMA floodplains
-Rscript baseline_model.R "base_case" "inside" "MF" $NBOOT
-Rscript baseline_model.R "base_case" "inside" "RT" $NBOOT
-Rscript baseline_model.R "base_case" "inside" "OF" $NBOOT
-Rscript baseline_model.R "base_case" "inside" "IN" $NBOOT
-Rscript baseline_model.R "base_case" "inside" "LO" $NBOOT
-Rscript postprocess_baseline_model.R "base_case" "inside" "MF"
-Rscript postprocess_baseline_model.R "base_case" "inside" "RT"
-Rscript postprocess_baseline_model.R "base_case" "inside" "OF"
-Rscript postprocess_baseline_model.R "base_case" "inside" "IN"
-Rscript postprocess_baseline_model.R "base_case" "inside" "LO"
+# Base case
+Rscript baseline_model.R "zipcode_base_case" "both" "lumped_floodzone" $PROPTYPE $NBOOT
+Rscript postprocess_baseline_model.R "zipcode_base_case" "both" "lumped_floodzone" $PROPTYPE
 
-# Baseline model - Properties outside FEMA floodplains
-Rscript baseline_model.R "base_case" "outside" "MF" $NBOOT
-Rscript baseline_model.R "base_case" "outside" "RT" $NBOOT
-Rscript baseline_model.R "base_case" "outside" "OF" $NBOOT
-Rscript baseline_model.R "base_case" "outside" "IN" $NBOOT
-Rscript baseline_model.R "base_case" "outside" "LO" $NBOOT
-Rscript postprocess_baseline_model.R "base_case" "outside" "MF"
-Rscript postprocess_baseline_model.R "base_case" "outside" "RT"
-Rscript postprocess_baseline_model.R "base_case" "outside" "OF"
-Rscript postprocess_baseline_model.R "base_case" "outside" "IN"
-Rscript postprocess_baseline_model.R "base_case" "outside" "LO"
+# Shorter duration
+Rscript baseline_model.R "zipcode_shorter_duration" "both" "lumped_floodzone" $PROPTYPE $NBOOT
+Rscript postprocess_baseline_model.R "zipcode_shorter_duration" "both" "lumped_floodzone" $PROPTYPE
 
-# Baseline model - All properties inside and outside FEMA floodplains
-Rscript baseline_model.R "base_case" "both" "MF" $NBOOT
-Rscript baseline_model.R "base_case" "both" "RT" $NBOOT
-Rscript baseline_model.R "base_case" "both" "OF" $NBOOT
-Rscript baseline_model.R "base_case" "both" "IN" $NBOOT
-Rscript baseline_model.R "base_case" "both" "LO" $NBOOT
-Rscript postprocess_baseline_model.R "base_case" "both" "MF"
-Rscript postprocess_baseline_model.R "base_case" "both" "RT"
-Rscript postprocess_baseline_model.R "base_case" "both" "OF"
-Rscript postprocess_baseline_model.R "base_case" "both" "IN"
-Rscript postprocess_baseline_model.R "base_case" "both" "LO"
+# Higher threshold
+Rscript baseline_model.R "zipcode_higher_threshold" "both" "lumped_floodzone" $PROPTYPE $NBOOT
+Rscript postprocess_baseline_model.R "zipcode_higher_threshold" "both" "lumped_floodzone" $PROPTYPE

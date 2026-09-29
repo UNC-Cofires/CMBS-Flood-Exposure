@@ -22,14 +22,15 @@ args <- commandArgs(trailingOnly = TRUE)
 
 scenario <- args[1]
 floodzone <- args[2]
-proptype <- args[3]
-nboots <- as.integer(args[4])
+groupatt <- args[3]
+proptype <- args[4]
+nboots <- as.integer(args[5])
 
 num_cores <- availableCores()
-print(glue("scenario={scenario}, floodzone={floodzone}, proptype={proptype}, nboots={nboots}, num_cores={num_cores}"))
+print(glue("scenario={scenario}, floodzone={floodzone}, groupatt={groupatt}, proptype={proptype}, nboots={nboots}, num_cores={num_cores}"))
 
 # Create folder for output
-outfolder <- file.path(pwd,glue("fitted_models/{scenario}/{floodzone}/{proptype}"))
+outfolder <- file.path(pwd,glue("fitted_models/{scenario}/{floodzone}/{groupatt}/{proptype}"))
 dir.create(outfolder,recursive=TRUE)
 
 ### *** LOAD DATA *** ###
@@ -38,15 +39,18 @@ dir.create(outfolder,recursive=TRUE)
 panel_data_path <- file.path(project_root,"create_panel/panel_outcome_data.parquet")
 panel_data <- read_parquet(panel_data_path)
 
-# Tract-level treatment status
-treatment_status_dir <- file.path(project_root,"exposure_measures/tract_exposure")
+# Neighborhood-level treatment status
+treatment_status_dir <- file.path(project_root,"exposure_measures/treatment_status")
 treatment_status_filename <- glue("{scenario}_treatment_status.parquet")
 treatment_status_path <- file.path(treatment_status_dir,treatment_status_filename)
 treatment_status <- read_parquet(treatment_status_path)
 treatment_status <- treatment_status %>% rename(year = calendar_time)
 
+# Get geographic unit at which treatment is assigned
+geog_unit <- colnames(treatment_status)[1]
+
 # Merge outcome and treatment status data
-panel_data <- left_join(panel_data, treatment_status, by = c("censustract_2010","year"))
+panel_data <- left_join(panel_data, treatment_status, by = c(geog_unit,"year"))
 
 ### *** LOG-TRANSFORM PROPERTY CASHFLOW MEAURES *** ###
 
@@ -76,7 +80,7 @@ panel_data$vintage_time <- interaction(panel_data$vintage, panel_data$year)
 ### *** SUBSET DATA *** ###
 
 # Subset by inside/outside FEMA 100-year and 500-year floodplain
-floodplain_mask <- (panel_data$FEMA_100y_floodplain_indicator == 1)|(panel_data$FEMA_500y_floodplain_indicator == 1)
+floodplain_mask <- (panel_data$lumped_floodzone == "inside_FEMA_floodplains")
 
 if (floodzone == "inside") {
   
@@ -99,83 +103,29 @@ panel_data <- panel_data[proptype_mask,]
 ## Save input data
 saveRDS(panel_data, file=file.path(outfolder,glue("{proptype}_data.rds")))
 
-## Currently 60+ days delinquent
-D60_mod <- fect(D60 ~ under_treatment, data = panel_data,
+## 60-day delinquency
+D60_mod <- fect(D60 ~ under_treatment, data = panel_data, group = groupatt,
                 index = c("masterloanidtrepp","year","region_time"),
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                keep.sims = TRUE)
+                se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
+                nboots = nboots, keep.sims = TRUE)
 
 saveRDS(D60_mod, file=file.path(outfolder,glue("{proptype}_D60_mod.rds")))
 
-## Ever 60+ days delinquent
-ever_D60_mod <- fect(ever_D60 ~ under_treatment, data = panel_data,
-                     index = c("masterloanidtrepp","year","region_time"),
-                     method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                     se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                     keep.sims = TRUE)
-
-saveRDS(ever_D60_mod, file=file.path(outfolder,glue("{proptype}_ever_D60_mod.rds")))
-
-## Loss rate (100 x realized losses / original loan balance)
-loss_rate_mod <- fect(loss_rate ~ under_treatment, data = panel_data,
-                      index = c("masterloanidtrepp","year","region_time"),
-                      method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                      se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                      keep.sims = TRUE)
-
-saveRDS(loss_rate_mod, file=file.path(outfolder,glue("{proptype}_loss_rate_mod.rds")))
-
-## Revenues
-rev_mod <- fect(log_rev ~ under_treatment, data = panel_data,
-                index = c("masterloanidtrepp","year","region_time"),
-                method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                keep.sims = TRUE)
-
-saveRDS(rev_mod, file=file.path(outfolder,glue("{proptype}_rev_mod.rds")))
-
-## Expenses
-exp_mod <- fect(log_exp ~ under_treatment, data = panel_data,
-                index = c("masterloanidtrepp","year","region_time"),
-                method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                keep.sims = TRUE)
-
-saveRDS(exp_mod, file=file.path(outfolder,glue("{proptype}_exp_mod.rds")))
-
 ## Net operating income
-noi_mod <- fect(log_noi ~ under_treatment, data = panel_data,
+noi_mod <- fect(log_noi ~ under_treatment, data = panel_data, group = groupatt,
                 index = c("masterloanidtrepp","year","region_time"),
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                keep.sims = TRUE)
+                se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
+                nboots = nboots, keep.sims = TRUE)
 
 saveRDS(noi_mod, file=file.path(outfolder,glue("{proptype}_noi_mod.rds")))
 
 ## Occupancy
-occ_mod <- fect(occ ~ under_treatment, data = panel_data,
+occ_mod <- fect(occ ~ under_treatment, data = panel_data, group = groupatt,
                 index = c("masterloanidtrepp","year","region_time"),
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                keep.sims = TRUE)
+                se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
+                nboots = nboots, keep.sims = TRUE)
 
 saveRDS(occ_mod, file=file.path(outfolder,glue("{proptype}_occ_mod.rds")))
-
-## Missing NOI
-miss_noi_mod <- fect(missing_noi ~ under_treatment, data = panel_data,
-                     index = c("masterloanidtrepp","year","region_time"),
-                     method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                     se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                     keep.sims = TRUE)
-
-saveRDS(miss_noi_mod, file=file.path(outfolder,glue("{proptype}_miss_noi_mod.rds")))
-
-## Missing occupancy
-miss_occ_mod <- fect(missing_occ ~ under_treatment, data = panel_data,
-                     index = c("masterloanidtrepp","year","region_time"),
-                     method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                     se = TRUE, parallel = TRUE, cores = num_cores, nboots = nboots,
-                     keep.sims = TRUE)
-
-saveRDS(miss_occ_mod, file=file.path(outfolder,glue("{proptype}_miss_occ_mod.rds")))
