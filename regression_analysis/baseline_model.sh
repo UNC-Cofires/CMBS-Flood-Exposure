@@ -14,17 +14,21 @@ module purge
 module load r/4.5.0
 
 # List of property types
-PROPTYPES=("MF","RT","OF","IN","LO")
+PROPTYPES=("MF" "RT" "OF" "IN" "LO")
 
 # Specific property type to run
 PROPTYPE=${PROPTYPES[$SLURM_ARRAY_TASK_ID]}
 
 # Number of bootstrap replicates drawn when computing SEs
-NBOOT=500
+NBOOT=200
 
 # Base case
 Rscript baseline_model.R "zipcode_base_case" "both" "lumped_floodzone" $PROPTYPE $NBOOT
 Rscript postprocess_baseline_model.R "zipcode_base_case" "both" "lumped_floodzone" $PROPTYPE
+
+# Subset to floodplain
+Rscript baseline_model.R "zipcode_base_case" "inside" "floodzone" $PROPTYPE $NBOOT
+Rscript postprocess_baseline_model.R "zipcode_base_case" "inside" "floodzone" $PROPTYPE
 
 # Shorter duration
 Rscript baseline_model.R "zipcode_shorter_duration" "both" "lumped_floodzone" $PROPTYPE $NBOOT
