@@ -44,9 +44,13 @@ loans = loans[~multi_loan_mask]
 num_loans = len(loans['Loan Number'].unique())
 print(f'2) Dropped cross-collateralized and supplemental loans. Number of loans remaining: {num_loans}',flush=True)
 
-# Exclude properties with missing address information
+# Exclude properties with incomplete address information
 address_cols = ['Property Address','Property City','Property State','Property Zip Code']
-missing_address_mask = loans[address_cols].isna().any(axis=1)
+m1 = (loans[address_cols].isna().any(axis=1))
+m2 = (loans['Property Additional Addresses']=='Y')
+m3 = (loans['Property Address'].str.lower().str.contains('various'))
+m4 = (loans['Property Address'].str.lower().str.contains('multiple address'))
+missing_address_mask = (m1|m2|m3|m4)
 loans = loans[~missing_address_mask]
 num_loans = len(loans['Loan Number'].unique())
 print(f'3) Dropped loans with missing address information. Number of loans remaining: {num_loans}',flush=True)
