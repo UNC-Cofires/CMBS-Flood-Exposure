@@ -17,6 +17,9 @@ loans = pd.read_parquet(config['paths']['dus_disclose_search_results'])
 # List of included US states
 included_states = np.loadtxt(config['paths']['included_states'],dtype=str)
 
+# Loan numbers included in multifamily loan performance database
+MFLPD_loan_numbers = pd.read_parquet(config['paths']['fannie_loan_performance_data'],columns=['Loan Number'])['Loan Number']
+
 ### *** FILTER DATA *** ###
 
 # Get starting number of loans
@@ -53,6 +56,12 @@ included_states_mask = loans['Property State'].isin(included_states)
 loans = loans[included_states_mask].reset_index(drop=True)
 num_loans = len(loans['Loan Number'].unique())
 print(f'4) Dropped from outside list of included states. Number of loans remaining: {num_loans}',flush=True)
+
+# Exclude loans not included in multifamily loan performance database
+MFLPD_mask = loans['Loan Number'].isin(MFLPD_loan_numbers)
+loans = loans[MFLPD_mask]
+num_loans = len(loans['Loan Number'].unique())
+print(f'5) Dropped loans that are missing from Multifamily Loan Performance Dataset. Number of loans remaining: {num_loans}',flush=True)
 
 # Print update for user
 loans = loans.reset_index(drop=True)

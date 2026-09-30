@@ -5,6 +5,7 @@ Starting number of loans: 108256
 2) Dropped cross-collateralized and supplemental loans. Number of loans remaining: 105922
 3) Dropped loans with missing address information. Number of loans remaining: 59267
 4) Dropped from outside list of included states. Number of loans remaining: 59257
+5) Dropped loans that are missing from Multifamily Loan Performance Dataset. Number of loans remaining: 51540
 
-Ending number of loans: 59257 (54.74%)
+Ending number of loans: 51540 (47.61%)
 
