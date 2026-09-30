@@ -231,13 +231,13 @@ occ_mod <- readRDS(file.path(fitted_dir,glue("{proptype}_occ_mod.rds")))
 ### *** CALCULATE DYNAMIC TREATMENT EFFECTS UNDER REPEATED TREATMENT *** ###
 
 ## 60+ days delinquent
-D60_dynamic_effects <- repeated_treatment_effects(D60_mod,panel_data,groupatt="lumped_floodzone")
+D60_dynamic_effects <- repeated_treatment_effects(D60_mod,panel_data,groupatt=groupatt)
 write_parquet(D60_dynamic_effects, sink=file.path(fitted_dir,glue("{proptype}_D60_dynamic_effects.parquet")))
 
 ## Net operating income
-noi_dynamic_effects <- repeated_treatment_effects(noi_mod,panel_data,groupatt="lumped_floodzone")
+noi_dynamic_effects <- repeated_treatment_effects(noi_mod,panel_data,groupatt=groupatt)
 write_parquet(noi_dynamic_effects, sink=file.path(fitted_dir,glue("{proptype}_noi_dynamic_effects.parquet")))
 
 ## Occupancy
-occ_dynamic_effects <- repeated_treatment_effects(occ_mod,panel_data,groupatt="lumped_floodzone")
+occ_dynamic_effects <- repeated_treatment_effects(occ_mod,panel_data,groupatt=groupatt)
 write_parquet(occ_dynamic_effects, sink=file.path(fitted_dir,glue("{proptype}_occ_dynamic_effects.parquet")))
