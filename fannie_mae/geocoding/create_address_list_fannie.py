@@ -23,5 +23,5 @@ loans = pd.read_parquet(loan_path,columns=usecols)
 loans.columns = ['loan_number','propname','address','city','state','zip']
 
 # Save results
-outname = os.path.join(outfolder,'filtered_loans_address_data_fannie.parquet')
+outname = os.path.join(outfolder,'filtered_loans_address_data.parquet')
 loans.to_parquet(outname)
