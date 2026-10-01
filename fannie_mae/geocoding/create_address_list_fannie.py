@@ -19,6 +19,9 @@ loan_path = os.path.join(project_root,'fannie_mae/create_panel/filtered_loans_fa
 usecols = ['Loan Number','Property Name','Property Address','Property City','Property State','Property Zip Code']
 loans = pd.read_parquet(loan_path,columns=usecols)
 
+# Rename columns
+loans.columns = ['loan_number','propname','address','city','state','zip']
+
 # Save results
 outname = os.path.join(outfolder,'filtered_loans_address_data_fannie.parquet')
 loans.to_parquet(outname)
