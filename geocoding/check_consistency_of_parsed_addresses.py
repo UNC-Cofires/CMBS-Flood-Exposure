@@ -54,7 +54,7 @@ loan_level_address_data = pd.read_parquet(loan_level_address_data_path)
 
 # List of LLMs whose outputs will be compared
 # (command-line argument passed as a comma-separated list)
-model_ids_string =  "cyankiwi/Qwen3.5-9B-AWQ-4bit,cyankiwi/gemma-4-12B-it-AWQ-INT4"#sys.argv[1]
+model_ids_string = sys.argv[1]
 model_ids = model_ids_string.split(',')
 model_names = [model_id.split('/')[-1] for model_id in model_ids]
 
