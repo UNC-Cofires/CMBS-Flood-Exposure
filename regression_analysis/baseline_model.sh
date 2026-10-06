@@ -20,20 +20,36 @@ PROPTYPES=("MF" "RT" "OF" "IN" "LO")
 PROPTYPE=${PROPTYPES[$SLURM_ARRAY_TASK_ID]}
 
 # Number of bootstrap replicates drawn when computing SEs
-NBOOT=200
+NBOOTS=200
 
-# Base case
-Rscript baseline_model.R "zipcode_base_case" "both" "lumped_floodzone" $PROPTYPE $NBOOT
-Rscript postprocess_baseline_model.R "zipcode_base_case" "both" "lumped_floodzone" $PROPTYPE
+# Base case: SFHA
+Rscript baseline_model.R \
+--name "base_case_sfha" \
+--treatment "zipcode_base_case" \
+--floodzones "FEMA_100y_floodplain" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS
 
-# Subset to floodplain
-Rscript baseline_model.R "zipcode_base_case" "inside" "floodzone" $PROPTYPE $NBOOT
-Rscript postprocess_baseline_model.R "zipcode_base_case" "inside" "floodzone" $PROPTYPE
+# Base case: Non-SFHA
+Rscript baseline_model.R \
+--name "base_case_nonsfha" \
+--treatment "zipcode_base_case" \
+--floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS
 
-# Shorter duration
-Rscript baseline_model.R "zipcode_shorter_duration" "both" "lumped_floodzone" $PROPTYPE $NBOOT
-Rscript postprocess_baseline_model.R "zipcode_shorter_duration" "both" "lumped_floodzone" $PROPTYPE
+# Gridcell: SFHA
+Rscript baseline_model.R \
+--name "gridcell_sfha" \
+--treatment "gridcell_base_case" \
+--floodzones "FEMA_100y_floodplain" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS
 
-# Higher threshold
-Rscript baseline_model.R "zipcode_higher_threshold" "both" "lumped_floodzone" $PROPTYPE $NBOOT
-Rscript postprocess_baseline_model.R "zipcode_higher_threshold" "both" "lumped_floodzone" $PROPTYPE
+# Gridcell: Non-SFHA
+Rscript baseline_model.R \
+--name "gridcell_nonsfha" \
+--treatment "gridcell_base_case" \
+--floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS

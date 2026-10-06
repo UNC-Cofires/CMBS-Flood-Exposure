@@ -1,6 +1,8 @@
 library(glue)
 library(here)
 library(yaml)
+library(optparse)
+library(jsonlite)
 library(arrow)
 library(parallelly)
 library(dplyr)
@@ -17,21 +19,31 @@ project_root <- dirname(pwd)
 config_path <- file.path(project_root,"config.yaml")
 config <- read_yaml(config_path)
 
-# Read command-line arguments
-args <- commandArgs(trailingOnly = TRUE)
-
-scenario <- args[1]
-floodzone <- args[2]
-groupatt <- args[3]
-proptype <- args[4]
-nboots <- as.integer(args[5])
-
+# Get number of available cores
 num_cores <- availableCores()
-print(glue("scenario={scenario}, floodzone={floodzone}, groupatt={groupatt}, proptype={proptype}, nboots={nboots}, num_cores={num_cores}"))
+
+### *** PARSE COMMAND-LINE ARGUMENTS *** ###
+
+option_list <- list(
+  make_option("--name", type = "character", default = format(Sys.time(), "%Y-%m-%d_model_run")),
+  make_option("--treatment", type = "character", default = "zipcode_base_case"),
+  make_option("--floodzones", type = "character", default = "FEMA_100y_floodplain,FEMA_500y_floodplain"),
+  make_option("--groupatt", type = "character", default = NULL),
+  make_option("--proptype", type = "character", default = "MF"),
+  make_option("--nboots",    type = "integer",   default = 200)
+)
+
+params <- parse_args(OptionParser(option_list = option_list))
 
 # Create folder for output
-outfolder <- file.path(pwd,glue("fitted_models/{scenario}/{floodzone}/{groupatt}/{proptype}"))
+outfolder <- file.path(pwd,glue("fitted_models/{params$name}/{params$proptype}"))
 dir.create(outfolder,recursive=TRUE)
+
+# Save command-line arguments as JSON
+write(
+  toJSON(params, pretty = TRUE, auto_unbox = TRUE),
+  file.path(outfolder, "params.json")
+)
 
 ### *** LOAD DATA *** ###
 
@@ -41,7 +53,7 @@ panel_data <- read_parquet(panel_data_path)
 
 # Neighborhood-level treatment status
 treatment_status_dir <- file.path(project_root,"exposure_measures/treatment_status")
-treatment_status_filename <- glue("{scenario}_treatment_status.parquet")
+treatment_status_filename <- glue("{params$treatment}_treatment_status.parquet")
 treatment_status_path <- file.path(treatment_status_dir,treatment_status_filename)
 treatment_status <- read_parquet(treatment_status_path)
 treatment_status <- treatment_status %>% rename(year = calendar_time)
@@ -77,55 +89,45 @@ panel_data$region_time <- interaction(panel_data$cbsa_title, panel_data$year)
 # Vintage x Time
 panel_data$vintage_time <- interaction(panel_data$vintage, panel_data$year)
 
-### *** SUBSET DATA *** ###
+### *** FILTER AND SUBSET DATA *** ###
 
-# Subset by inside/outside FEMA 100-year and 500-year floodplain
-floodplain_mask <- (panel_data$lumped_floodzone == "inside_FEMA_floodplains")
+# Flood zone
+included_floodzones <- strsplit(params$floodzones,",")[[1]]
+floodzone_mask <- (panel_data$floodzone %in% included_floodzones)
+panel_data <- panel_data[floodzone_mask,]
 
-if (floodzone == "inside") {
-  
-  # Filter for properties inside FEMA floodplains
-  panel_data <- panel_data[floodplain_mask,]
-  
-} else if (floodzone == "outside") {
-  
-  # Filter for properties outside FEMA floodplains
-  panel_data <- panel_data[!floodplain_mask,]
-  
-}
-
-# Subset by property type of interest
-proptype_mask <- (panel_data$cssaproptype == proptype)
+# Property type
+proptype_mask <- (panel_data$cssaproptype == params$proptype)
 panel_data <- panel_data[proptype_mask,]
+
+# Save input data
+saveRDS(panel_data, file=file.path(outfolder,glue("{params$proptype}_data.rds")))
 
 ### *** FIT MODELS *** ###
 
-## Save input data
-saveRDS(panel_data, file=file.path(outfolder,glue("{proptype}_data.rds")))
-
 ## 60-day delinquency
-D60_mod <- fect(D60 ~ under_treatment, data = panel_data, group = groupatt,
+D60_mod <- fect(D60 ~ under_treatment, data = panel_data, group = params$groupatt,
                 index = c("masterloanidtrepp","year","region_time"),
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
-                nboots = nboots, keep.sims = TRUE)
+                nboots = params$nboots, keep.sims = TRUE)
 
-saveRDS(D60_mod, file=file.path(outfolder,glue("{proptype}_D60_mod.rds")))
+saveRDS(D60_mod, file=file.path(outfolder,glue("{params$proptype}_D60_mod.rds")))
 
 ## Net operating income
-noi_mod <- fect(log_noi ~ under_treatment, data = panel_data, group = groupatt,
+noi_mod <- fect(log_noi ~ under_treatment, data = panel_data, group = params$groupatt,
                 index = c("masterloanidtrepp","year","region_time"),
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
-                nboots = nboots, keep.sims = TRUE)
+                nboots = params$nboots, keep.sims = TRUE)
 
-saveRDS(noi_mod, file=file.path(outfolder,glue("{proptype}_noi_mod.rds")))
+saveRDS(noi_mod, file=file.path(outfolder,glue("{params$proptype}_noi_mod.rds")))
 
 ## Occupancy
-occ_mod <- fect(occ ~ under_treatment, data = panel_data, group = groupatt,
+occ_mod <- fect(occ ~ under_treatment, data = panel_data, group = params$groupatt,
                 index = c("masterloanidtrepp","year","region_time"),
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
-                nboots = nboots, keep.sims = TRUE)
+                nboots = params$nboots, keep.sims = TRUE)
 
-saveRDS(occ_mod, file=file.path(outfolder,glue("{proptype}_occ_mod.rds")))
+saveRDS(occ_mod, file=file.path(outfolder,glue("{params$proptype}_occ_mod.rds")))
