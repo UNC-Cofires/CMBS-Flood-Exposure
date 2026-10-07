@@ -229,8 +229,11 @@ params <- fromJSON(file.path(fitted_dir,"params.json"))
 
 panel_data <- readRDS(file.path(fitted_dir,glue("{params$proptype}_data.rds")))
 D60_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_D60_mod.rds")))
-noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_noi_mod.rds")))
+loss_rate_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_loss_rate_mod.rds")))
 occ_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_occ_mod.rds")))
+noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_noi_mod.rds")))
+rev_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_rev_mod.rds")))
+exp_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_exp_mod.rds")))
 
 ### *** CALCULATE DYNAMIC TREATMENT EFFECTS UNDER REPEATED TREATMENT *** ###
 
@@ -238,10 +241,22 @@ occ_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_occ_mod.rds")))
 D60_dynamic_effects <- repeated_treatment_effects(D60_mod,panel_data,groupatt=params$groupatt)
 write_parquet(D60_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_D60_dynamic_effects.parquet")))
 
-## Net operating income
-noi_dynamic_effects <- repeated_treatment_effects(noi_mod,panel_data,groupatt=params$groupatt)
-write_parquet(noi_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_noi_dynamic_effects.parquet")))
+## Loss rate
+loss_rate_dynamic_effects <- repeated_treatment_effects(loss_rate_mod,panel_data,groupatt=params$groupatt)
+write_parquet(loss_rate_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_loss_rate_dynamic_effects.parquet")))
 
 ## Occupancy
 occ_dynamic_effects <- repeated_treatment_effects(occ_mod,panel_data,groupatt=params$groupatt)
 write_parquet(occ_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_occ_dynamic_effects.parquet")))
+
+## Net operating income
+noi_dynamic_effects <- repeated_treatment_effects(noi_mod,panel_data,groupatt=params$groupatt)
+write_parquet(noi_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_noi_dynamic_effects.parquet")))
+
+## Revenues
+rev_dynamic_effects <- repeated_treatment_effects(rev_mod,panel_data,groupatt=params$groupatt)
+write_parquet(rev_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_rev_dynamic_effects.parquet")))
+
+## Expenses
+exp_dynamic_effects <- repeated_treatment_effects(exp_mod,panel_data,groupatt=params$groupatt)
+write_parquet(exp_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_exp_dynamic_effects.parquet")))

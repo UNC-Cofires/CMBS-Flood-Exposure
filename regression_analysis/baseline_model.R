@@ -114,14 +114,14 @@ D60_mod <- fect(D60 ~ under_treatment, data = panel_data, group = params$groupat
 
 saveRDS(D60_mod, file=file.path(outfolder,glue("{params$proptype}_D60_mod.rds")))
 
-## Net operating income
-noi_mod <- fect(log_noi ~ under_treatment, data = panel_data, group = params$groupatt,
+## Loss rate
+loss_rate_mod <- fect(loss_rate ~ under_treatment, data = panel_data, group = params$groupatt,
                 index = c("masterloanidtrepp","year","region_time"),
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
                 nboots = params$nboots, keep.sims = TRUE)
 
-saveRDS(noi_mod, file=file.path(outfolder,glue("{params$proptype}_noi_mod.rds")))
+saveRDS(loss_rate_mod, file=file.path(outfolder,glue("{params$proptype}_loss_rate_mod.rds")))
 
 ## Occupancy
 occ_mod <- fect(occ ~ under_treatment, data = panel_data, group = params$groupatt,
@@ -131,3 +131,30 @@ occ_mod <- fect(occ ~ under_treatment, data = panel_data, group = params$groupat
                 nboots = params$nboots, keep.sims = TRUE)
 
 saveRDS(occ_mod, file=file.path(outfolder,glue("{params$proptype}_occ_mod.rds")))
+
+## Net operating income
+noi_mod <- fect(log_noi ~ under_treatment, data = panel_data, group = params$groupatt,
+                index = c("masterloanidtrepp","year","region_time"),
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
+                nboots = params$nboots, keep.sims = TRUE)
+
+saveRDS(noi_mod, file=file.path(outfolder,glue("{params$proptype}_noi_mod.rds")))
+
+## Revenues
+rev_mod <- fect(log_rev ~ under_treatment, data = panel_data, group = params$groupatt,
+                index = c("masterloanidtrepp","year","region_time"),
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
+                nboots = params$nboots, keep.sims = TRUE)
+
+saveRDS(rev_mod, file=file.path(outfolder,glue("{params$proptype}_rev_mod.rds")))
+
+## Expenses
+exp_mod <- fect(log_exp ~ under_treatment, data = panel_data, group = params$groupatt,
+                index = c("masterloanidtrepp","year","region_time"),
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                se = TRUE, loo = TRUE, parallel = TRUE, cores = num_cores, 
+                nboots = params$nboots, keep.sims = TRUE)
+
+saveRDS(exp_mod, file=file.path(outfolder,glue("{params$proptype}_exp_mod.rds")))
