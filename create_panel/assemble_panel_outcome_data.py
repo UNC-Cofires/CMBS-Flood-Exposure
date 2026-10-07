@@ -189,15 +189,19 @@ panel = panel[study_period_mask].reset_index(drop=True)
 
 # Load buildings
 buildings_path = os.path.join(project_root,'geocoding/property_geospatial_data/matched_buildings')
-buildings = gpd.read_parquet(buildings_path)
+buildings = gpd.read_parquet(buildings_path).set_geometry('point_geometry').to_crs(config['gis_params']['geographic_crs'])
 buildings = buildings.sort_values(by=['masterloanidtrepp','direct_match','SQMETERS'],ascending=False)
+
+# Create latitude/longitude variables
+buildings['latitude'] = buildings['point_geometry'].y
+buildings['longitude'] = buildings['point_geometry'].x
 
 # Create census tract variable
 buildings['censustract_2010'] = buildings['censusblockgroup_2010'].map(lambda x: x[:11], na_action='ignore')
 
 # Aggregate attributes from structures associated with a given property
-agg_dict = {'LATITUDE':'first',
-            'LONGITUDE':'first',
+agg_dict = {'latitude':'first',
+            'longitude':'first',
             'countyfips_2022':'first',
             'censustract_2010':'first',
             'zcta_2020':'first',
@@ -212,7 +216,7 @@ building_attributes['floodzone'] = pd.from_dummies(building_attributes[['FEMA_10
 building_attributes['floodzone'] = building_attributes['floodzone'].str.replace('_indicator','')
 building_attributes['lumped_floodzone'] = building_attributes['floodzone'].apply(lambda x: 'inside_FEMA_floodplains' if x != 'outside_FEMA_floodplains' else x)
 
-building_attributes = building_attributes.rename(columns={'LATITUDE':'latitude','LONGITUDE':'longitude','BUILD_ID':'num_structures'}).reset_index()
+building_attributes = building_attributes.rename(columns={'BUILD_ID':'num_structures'}).reset_index()
 
 panel = pd.merge(panel,building_attributes,on='masterloanidtrepp',how='inner')
 
