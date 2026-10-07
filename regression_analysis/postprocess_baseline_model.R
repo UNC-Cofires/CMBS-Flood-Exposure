@@ -1,11 +1,12 @@
 library(glue)
 library(here)
 library(yaml)
+library(optparse)
+library(jsonlite)
 library(arrow)
 library(parallelly)
 library(dplyr)
 library(fect)
-
 
 ### *** HELPER FUNCTIONS *** ###
 
@@ -210,34 +211,37 @@ project_root <- dirname(pwd)
 config_path <- file.path(project_root,"config.yaml")
 config <- read_yaml(config_path)
 
-# Get scenario and property type
-args <- commandArgs(trailingOnly = TRUE)
-scenario <- args[1]
-floodzone <- args[2]
-groupatt <- args[3]
-proptype <- args[4]
+### *** PARSE COMMAND-LINE ARGUMENTS *** ###
 
-print(glue("scenario={scenario}, floodzone={floodzone}, groupatt={groupatt}, proptype={proptype}"))
+# Get name of scenario and property type
+option_list <- list(
+  make_option("--name", type = "character", default = format(Sys.time(), "%Y-%m-%d_model_run")),
+  make_option("--proptype", type = "character", default = "MF")
+)
+
+# Load full set of user-defined parameters used in model run
+params <- parse_args(OptionParser(option_list = option_list))
+fitted_dir <- file.path(pwd,glue("fitted_models/{params$name}/{params$proptype}"))
+params <- fromJSON(file.path(fitted_dir,"params.json"))
+
 
 ### *** LOAD FITTED MODELS AND DATA *** ###
 
-fitted_dir <- file.path(pwd,glue("fitted_models/{scenario}/{floodzone}/{groupatt}/{proptype}"))
-
-panel_data <- readRDS(file.path(fitted_dir,glue("{proptype}_data.rds")))
-D60_mod <- readRDS(file.path(fitted_dir,glue("{proptype}_D60_mod.rds")))
-noi_mod <- readRDS(file.path(fitted_dir,glue("{proptype}_noi_mod.rds")))
-occ_mod <- readRDS(file.path(fitted_dir,glue("{proptype}_occ_mod.rds")))
+panel_data <- readRDS(file.path(fitted_dir,glue("{params$proptype}_data.rds")))
+D60_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_D60_mod.rds")))
+noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_noi_mod.rds")))
+occ_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_occ_mod.rds")))
 
 ### *** CALCULATE DYNAMIC TREATMENT EFFECTS UNDER REPEATED TREATMENT *** ###
 
 ## 60+ days delinquent
-D60_dynamic_effects <- repeated_treatment_effects(D60_mod,panel_data,groupatt=groupatt)
-write_parquet(D60_dynamic_effects, sink=file.path(fitted_dir,glue("{proptype}_D60_dynamic_effects.parquet")))
+D60_dynamic_effects <- repeated_treatment_effects(D60_mod,panel_data,groupatt=params$groupatt)
+write_parquet(D60_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_D60_dynamic_effects.parquet")))
 
 ## Net operating income
-noi_dynamic_effects <- repeated_treatment_effects(noi_mod,panel_data,groupatt=groupatt)
-write_parquet(noi_dynamic_effects, sink=file.path(fitted_dir,glue("{proptype}_noi_dynamic_effects.parquet")))
+noi_dynamic_effects <- repeated_treatment_effects(noi_mod,panel_data,groupatt=params$groupatt)
+write_parquet(noi_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_noi_dynamic_effects.parquet")))
 
 ## Occupancy
-occ_dynamic_effects <- repeated_treatment_effects(occ_mod,panel_data,groupatt=groupatt)
-write_parquet(occ_dynamic_effects, sink=file.path(fitted_dir,glue("{proptype}_occ_dynamic_effects.parquet")))
+occ_dynamic_effects <- repeated_treatment_effects(occ_mod,panel_data,groupatt=params$groupatt)
+write_parquet(occ_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_occ_dynamic_effects.parquet")))

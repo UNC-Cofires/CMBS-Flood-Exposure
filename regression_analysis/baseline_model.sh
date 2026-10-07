@@ -30,6 +30,8 @@ Rscript baseline_model.R \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
+Rscript postprocess_baseline_model.R --name "base_case_sfha" --proptype $PROPTYPE
+
 # Base case: Non-SFHA
 Rscript baseline_model.R \
 --name "base_case_nonsfha" \
@@ -37,6 +39,8 @@ Rscript baseline_model.R \
 --floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
+
+Rscript postprocess_baseline_model.R --name "base_case_nonsfha" --proptype $PROPTYPE
 
 # Gridcell: SFHA
 Rscript baseline_model.R \
@@ -46,6 +50,8 @@ Rscript baseline_model.R \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
+Rscript postprocess_baseline_model.R --name "gridcell_sfha" --proptype $PROPTYPE
+
 # Gridcell: Non-SFHA
 Rscript baseline_model.R \
 --name "gridcell_nonsfha" \
@@ -53,3 +59,5 @@ Rscript baseline_model.R \
 --floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
+
+Rscript postprocess_baseline_model.R --name "gridcell_nonsfha" --proptype $PROPTYPE
