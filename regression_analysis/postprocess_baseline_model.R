@@ -30,7 +30,6 @@ library(fect)
 # mod <- fect(Y ~ D, 
 #             data = panel_data, 
 #             se=TRUE,
-#             loo=TRUE,             # For pre-treatment periods, perform placebo test using leave-period-out approach.
 #             group=groupatt,       # If calculating group-wise ATTs, column denoting group membership. 
 #             ci.method="normal",   # CI: θ ± z*SE where z is the 1-α/2 quantile of a standard normal distribution.
 #             nboots=200,           # Need at least 200 replicates to reliably estimate SEs.
@@ -63,28 +62,26 @@ repeated_treatment_effects <- function(mod,
   
   ## Extract pre-treatment effect estimates from fect model object
   
-  # Overall
-  
-  pre_treatment <- data.frame(mod$pre.est.att)
+  pre_treatment <- data.frame(mod$est.att)
   pre_treatment[[event_time_user]] <- as.numeric(rownames(pre_treatment)) - 1
   rownames(pre_treatment) <- NULL
+  pre_treatment <- pre_treatment[pre_treatment[[event_time_user]] < 0,]
   
   pre_treatment <- pre_treatment %>% rename(
     estimate=ATT,
     se=S.E.,
     ci.lo=CI.lower,
     ci.hi=CI.upper,
-    n_cells=count.on
+    n_cells=count
   )
   
   output_column_order <- c(event_time_user,"estimate","se","ci.lo","ci.hi","n_cells")
   pre_treatment <- pre_treatment[,output_column_order]
   
   # By group
-  
   if (!is.null(groupatt)){
     
-    groups <- names(mod$pre.est.group.output)
+    groups <- names(mod$est.group.output)
     
     overall_group_name <- paste(groups, collapse = " OR ")
     pre_treatment[[groupatt]] <- overall_group_name
@@ -92,17 +89,19 @@ repeated_treatment_effects <- function(mod,
     
     for (group in groups){
       
-      group_pre_treatment <- data.frame(mod$pre.est.group.output[[group]]$pre.est.att)
+      group_pre_treatment <- data.frame(mod$est.group.output[[group]]$att.on)
       
       group_pre_treatment[[event_time_user]] <- as.numeric(rownames(group_pre_treatment)) - 1
       rownames(group_pre_treatment) <- NULL
+      group_pre_treatment <- group_pre_treatment[group_pre_treatment[[event_time_user]] < 0,]
+      
       
       group_pre_treatment <- group_pre_treatment %>% rename(
         estimate=ATT,
         se=S.E.,
         ci.lo=CI.lower,
         ci.hi=CI.upper,
-        n_cells=count.on
+        n_cells=count
       )
       
       group_pre_treatment[[groupatt]] <- group
@@ -113,6 +112,12 @@ repeated_treatment_effects <- function(mod,
     }
     
   }
+  
+  # Re-calculate CIs
+  # (should only change estimates if user specifies a different alpha than 0.05)
+  z <- qnorm(1-alpha/2)
+  pre_treatment$ci.lo <- pre_treatment$estimate - z*pre_treatment$se
+  pre_treatment$ci.hi <- pre_treatment$estimate + z*pre_treatment$se
   
   ## Calculate ATT during post-treatment periods while accounting for repeated exposure
   
@@ -224,7 +229,6 @@ params <- parse_args(OptionParser(option_list = option_list))
 fitted_dir <- file.path(pwd,glue("fitted_models/{params$name}/{params$proptype}"))
 params <- fromJSON(file.path(fitted_dir,"params.json"))
 
-
 ### *** LOAD FITTED MODELS AND DATA *** ###
 
 panel_data <- readRDS(file.path(fitted_dir,glue("{params$proptype}_data.rds")))
@@ -260,3 +264,5 @@ write_parquet(rev_dynamic_effects, sink=file.path(fitted_dir,glue("{params$propt
 ## Expenses
 exp_dynamic_effects <- repeated_treatment_effects(exp_mod,panel_data,groupatt=params$groupatt)
 write_parquet(exp_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_exp_dynamic_effects.parquet")))
+
+

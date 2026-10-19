@@ -25,7 +25,7 @@ NBOOTS=200
 # Base case: SFHA
 Rscript baseline_model.R \
 --name "base_case_sfha" \
---treatment "zipcode_base_case" \
+--treatment_scenario "zipcode_base_case" \
 --floodzones "FEMA_100y_floodplain" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
@@ -35,7 +35,7 @@ Rscript postprocess_baseline_model.R --name "base_case_sfha" --proptype $PROPTYP
 # Base case: Non-SFHA
 Rscript baseline_model.R \
 --name "base_case_nonsfha" \
---treatment "zipcode_base_case" \
+--treatment_scenario "zipcode_base_case" \
 --floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
@@ -45,7 +45,7 @@ Rscript postprocess_baseline_model.R --name "base_case_nonsfha" --proptype $PROP
 # Gridcell: SFHA
 Rscript baseline_model.R \
 --name "gridcell_sfha" \
---treatment "gridcell_base_case" \
+--treatment_scenario "gridcell_base_case" \
 --floodzones "FEMA_100y_floodplain" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
@@ -55,7 +55,7 @@ Rscript postprocess_baseline_model.R --name "gridcell_sfha" --proptype $PROPTYPE
 # Gridcell: Non-SFHA
 Rscript baseline_model.R \
 --name "gridcell_nonsfha" \
---treatment "gridcell_base_case" \
+--treatment_scenario "gridcell_base_case" \
 --floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
