@@ -24,7 +24,8 @@ def evaluate_treatment_status(event_timeseries,calendar_time,treatment_duration)
     """
 
     # Calculate number of flood events over previous n years
-    event_timeseries = pd.Series(event_timeseries)
+    calendar_time = pd.Series(np.asarray(calendar_time))
+    event_timeseries = pd.Series(np.asarray(event_timeseries)).reset_index(drop=True)
     number_of_events = event_timeseries.rolling(window=treatment_duration,min_periods=1,center=False).sum()
     
     # Create indicator for whether more than one event occurred in the past n years
@@ -63,8 +64,8 @@ def evaluate_treatment_status(event_timeseries,calendar_time,treatment_duration)
     repeat_treatment_offset = repeat_treatment_offset.ffill().where(under_repeat_treatment == 1)
     
     # Write to dataframe
-    data = {'calendar_time':calendar_time,
-            'treatment_event':event_timeseries,
+    data = {'calendar_time':calendar_time.to_numpy(),
+            'treatment_event':event_timeseries.to_numpy(),
             'repeat_treatment_event': repeat_treatment_event.to_numpy(),
             'under_treatment':under_treatment.to_numpy(),
             'under_repeat_treatment':under_repeat_treatment.to_numpy(),
@@ -74,8 +75,7 @@ def evaluate_treatment_status(event_timeseries,calendar_time,treatment_duration)
     df = pd.DataFrame(data)
 
     # Cast as nullable int data type
-    df['time_since_treatment_event'] = df['time_since_treatment_event'].astype('int64[pyarrow]')
-    df['repeat_treatment_offset'] = df['repeat_treatment_offset'].astype('int64[pyarrow]')
+    df = df.astype('int64[pyarrow]')
 
     # Set index as calendar time
     df.set_index('calendar_time',inplace=True)
@@ -121,6 +121,13 @@ claim_rate['flood_event'] = (claim_rate['claimRate'] > claim_rate_threshold).ast
 # Evaluate treatment status over time under repeated treatment
 treatment_status = claim_rate.groupby(geog_unit).apply(lambda x: evaluate_treatment_status(x['flood_event'],x['year'],treatment_duration))
 treatment_status = treatment_status.reset_index()
+
+# Attach information on treatment dose (as measured by NFIP claim rate)
+treatment_intensity = claim_rate[[geog_unit,'year','claimRate']].rename(columns={'year':'calendar_time','claimRate':'treatment_intensity'})
+treatment_status = pd.merge(treatment_status,treatment_intensity,on=[geog_unit,'calendar_time'],how='left')
+treatment_status.loc[treatment_status['treatment_event']==0,'treatment_intensity'] = pd.NA
+
+# Add description of treatment
 treatment_status['treatment_description'] = treatment_description
 
 ### *** EVALUATE SPILLOVER STATUS OF NEIGHBORS OF FLOOD-EXPOSED UNITS *** ###
@@ -159,9 +166,47 @@ for col in spillover_status:
         new_colname = col.replace('treatment','spillover')
         spillover_status.rename(columns={col:new_colname},inplace=True)
 
-### *** COMBINE TREATMENT / SPILLOVER MEASURES *** ###
-
+# Attach to treatment status dataframe
 treatment_status = pd.merge(treatment_status,spillover_status,on=[geog_unit,'calendar_time'],how='left')
+
+### *** CREATE PLACEBO TREATMENT TO TEST FOR PRE-TRENDS *** ###
+
+placebo_status = treatment_status[[geog_unit,'calendar_time']]
+placebo_status['placebo_event'] = (treatment_status['time_since_treatment_event'] == -1*treatment_duration).astype('int64[pyarrow]').fillna(0)
+placebo_status = placebo_status.groupby(geog_unit).apply(lambda x: evaluate_treatment_status(x['placebo_event'],x['calendar_time'],treatment_duration))
+placebo_status = placebo_status.reset_index()
+
+# Rename columns to distinguish placebo treatment from actual treatment
+for col in placebo_status: 
+    if 'treatment' in col:
+        new_colname = col.replace('treatment','placebo')
+        placebo_status.rename(columns={col:new_colname},inplace=True)
+
+# Drop irrelevant columns
+placebo_status = placebo_status.drop(columns=['repeat_placebo_event','under_repeat_placebo','repeat_placebo_offset'])
+
+# Attach to treatment status dataframe
+treatment_status = pd.merge(treatment_status,placebo_status,on=[geog_unit,'calendar_time'],how='left')
+
+### *** CREATE PLACEBO TREATMENT TO TEST FOR CARRYOVER EFFECTS *** ###
+
+carryover_status = treatment_status[[geog_unit,'calendar_time']]
+carryover_status['carryover_event'] = (treatment_status.groupby(geog_unit)['under_treatment'].diff() == -1).astype('int64[pyarrow]').fillna(0)
+
+carryover_status = carryover_status.groupby(geog_unit).apply(lambda x: evaluate_treatment_status(x['carryover_event'],x['calendar_time'],treatment_duration))
+carryover_status = carryover_status.reset_index()
+
+# Rename columns to distinguish placebo treatment from actual treatment
+for col in carryover_status: 
+    if 'treatment' in col:
+        new_colname = col.replace('treatment','carryover')
+        carryover_status.rename(columns={col:new_colname},inplace=True)
+
+# Drop irrelevant columns
+carryover_status = carryover_status.drop(columns=['repeat_carryover_event','under_repeat_carryover','repeat_carryover_offset'])
+
+# Attach to treatment status dataframe
+treatment_status = pd.merge(treatment_status,carryover_status,on=[geog_unit,'calendar_time'],how='left')
 
 ### *** SAVE RESULTS *** ###
 
