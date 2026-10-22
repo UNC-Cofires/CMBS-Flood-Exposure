@@ -30,7 +30,6 @@ library(fect)
 # mod <- fect(Y ~ D, 
 #             data = panel_data, 
 #             se=TRUE,
-#             group=groupatt,       # If calculating group-wise ATTs, column denoting group membership. 
 #             ci.method="normal",   # CI: θ ± z*SE where z is the 1-α/2 quantile of a standard normal distribution.
 #             nboots=200,           # Need at least 200 replicates to reliably estimate SEs.
 #             keep.sims=TRUE)       # Save bootstrapped replicates so we can re-calculate SEs for custom estimands. 
@@ -47,18 +46,15 @@ library(fect)
 #        Defaults to NULL. 
 # param: alpha: significance level (alpha=0.05 for 95% CIs)
 #
-# returns: dynamic_treatment_effects: dataframe of dynamic treatment
-#          effect estimates with leads/lags defined based on event_time_user.
+# returns: res: list of data frames containing ATT estimates and bootstrap replicates
+#               for leads/lags defined based on event_time_user.
 
 repeated_treatment_effects <- function(mod,
                                        panel_data,
                                        id_col="masterloanidtrepp",
                                        time_col="year",
                                        event_time_user="time_since_treatment_event",
-                                       groupatt=NULL,
                                        alpha=0.05){
-  
-  
   
   ## Extract pre-treatment effect estimates from fect model object
   
@@ -78,54 +74,9 @@ repeated_treatment_effects <- function(mod,
   output_column_order <- c(event_time_user,"estimate","se","ci.lo","ci.hi","n_cells")
   pre_treatment <- pre_treatment[,output_column_order]
   
-  # By group
-  if (!is.null(groupatt)){
-    
-    groups <- names(mod$est.group.output)
-    
-    overall_group_name <- paste(groups, collapse = " OR ")
-    pre_treatment[[groupatt]] <- overall_group_name
-    output_column_order <- c(groupatt,event_time_user,"estimate","se","ci.lo","ci.hi","n_cells")
-    
-    for (group in groups){
-      
-      group_pre_treatment <- data.frame(mod$est.group.output[[group]]$att.on)
-      
-      group_pre_treatment[[event_time_user]] <- as.numeric(rownames(group_pre_treatment)) - 1
-      rownames(group_pre_treatment) <- NULL
-      group_pre_treatment <- group_pre_treatment[group_pre_treatment[[event_time_user]] < 0,]
-      
-      
-      group_pre_treatment <- group_pre_treatment %>% rename(
-        estimate=ATT,
-        se=S.E.,
-        ci.lo=CI.lower,
-        ci.hi=CI.upper,
-        n_cells=count
-      )
-      
-      group_pre_treatment[[groupatt]] <- group
-      group_pre_treatment <- group_pre_treatment[,output_column_order]
-      
-      pre_treatment <- bind_rows(pre_treatment,group_pre_treatment)
-      
-    }
-    
-  }
-  
-  # Re-calculate CIs
-  # (should only change estimates if user specifies a different alpha than 0.05)
-  z <- qnorm(1-alpha/2)
-  pre_treatment$ci.lo <- pre_treatment$estimate - z*pre_treatment$se
-  pre_treatment$ci.hi <- pre_treatment$estimate + z*pre_treatment$se
-  
   ## Calculate ATT during post-treatment periods while accounting for repeated exposure
   
-  if (!is.null(groupatt)){
-    repeated_event_time <- panel_data[,c(id_col,time_col,event_time_user,groupatt)]
-  }else{
-    repeated_event_time <- panel_data[,c(id_col,time_col,event_time_user)]
-  }
+  repeated_event_time <- panel_data[,c(id_col,time_col,event_time_user)]
   
   # Get Y_obs and Y0_hat estimates imputed by fect
   po <- imputed_outcomes(mod)
@@ -138,8 +89,6 @@ repeated_treatment_effects <- function(mod,
   
   ## Aggregate individual treatment effect estimates to produce estimates 
   ## of ATT and associated SEs during each post-treatment period
-  
-  # Overall
   
   post_treatment <- po |> 
     group_by(across(all_of(event_time_user))) |> 
@@ -155,56 +104,55 @@ repeated_treatment_effects <- function(mod,
   
   post_treatment <- left_join(post_treatment,se_est, by=event_time_user)
   
-  # Use standard error estimates to construct confidence intervals
-  z <- qnorm(1-alpha/2)
-  post_treatment$ci.lo <- post_treatment$estimate - z*post_treatment$se
-  post_treatment$ci.hi <- post_treatment$estimate + z*post_treatment$se
-  
-  
-  # By group
-  
-  if (!is.null(groupatt)){
-    
-    post_treatment[[groupatt]] <- overall_group_name
-    
-    group_post_treatment <- po |> 
-      group_by(across(all_of(c(groupatt,event_time_user)))) |> 
-      summarise(estimate = mean(eff, na.rm = TRUE), n_cells = dplyr::n())
-    
-    group_rep_est <- po_rep |> 
-      group_by(across(all_of(c(groupatt,event_time_user,"replicate")))) |> 
-      summarise(estimate = mean(eff, na.rm = TRUE))
-    
-    group_se_est <- group_rep_est |> 
-      group_by(across(all_of(c(groupatt,event_time_user)))) |> 
-      summarise(se = sd(estimate))
-    
-    group_post_treatment <- left_join(group_post_treatment,group_se_est, by=c(groupatt,event_time_user))
-    
-    # Construct confidence intervals by group
-    z <- qnorm(1-alpha/2)
-    group_post_treatment$ci.lo <- group_post_treatment$estimate - z*group_post_treatment$se
-    group_post_treatment$ci.hi <- group_post_treatment$estimate + z*group_post_treatment$se
-    
-    # Join to overall estimates
-    post_treatment <- bind_rows(post_treatment,group_post_treatment)
-  }
-  
   ## Combine pre- and post-treatment data
   dynamic_treatment_effects <- bind_rows(pre_treatment,post_treatment)
   dynamic_treatment_effects <- dynamic_treatment_effects[,output_column_order]
   
-  if (!is.null(groupatt)){
-    
-    dynamic_treatment_effects[[groupatt]] <- as.factor(dynamic_treatment_effects[[groupatt]])
-    dynamic_treatment_effects[[groupatt]] <- relevel(dynamic_treatment_effects[[groupatt]], ref=overall_group_name)
-    dynamic_treatment_effects <- dynamic_treatment_effects |> arrange(!!!rlang::syms(c(groupatt,event_time_user)))
-    
-  }
+  ## Use standard error estimates to construct confidence intervals
+  z <- qnorm(1-alpha/2)
+  dynamic_treatment_effects$ci.lo <- dynamic_treatment_effects$estimate - z*dynamic_treatment_effects$se
+  dynamic_treatment_effects$ci.hi <- dynamic_treatment_effects$estimate + z*dynamic_treatment_effects$se
   
-  # Return the output
-  return(dynamic_treatment_effects)
+  # Return:
+  # (1) estimated ATTs
+  # (2) bootstrapped replicates of estimated ATTs
+  # (3) imputed potential outcomes for treated observations
+  # (4) bootstrapped replicates of imputed potential outcomes
+  res = list(att.est=dynamic_treatment_effects,
+             att.rep=rep_est,
+             imputed.po.est=po,
+             imputed.po.rep=po_rep)
+  
+  return(res)
 }
+
+# Helper function to save ATT estimates and bootstrap replicates returned by
+# repeated_treatment_effects function as parquet files. 
+#
+# FUNCTION INPUT/OUTPUT:
+#
+# param: res: list of data frames returned by repeated_treatment_effects function
+# param: outfolder: path to output folder
+# param: proptype: property type
+# param: outcome: outcome of interest
+
+save_result_as_parquet <- function(res,outfolder,proptype,outcome){
+  
+  # Save object as RDS file
+  saveRDS(res, file=file.path(outfolder,glue("{params$proptype}_{outcome}_postprocessed.rds")))
+  
+  att.est <- res$att.est
+  att.rep <- res$att.rep
+  imputed.po.est <- res$imputed.po.est
+  imputed.po.rep <- res$imputed.po.rep
+  
+  # Save data as parquet file
+  write_parquet(att.est, sink=file.path(outfolder,glue("{params$proptype}_{outcome}_att_est.parquet")))
+  write_parquet(att.rep, sink=file.path(outfolder,glue("{params$proptype}_{outcome}_att_rep.parquet")))
+  write_parquet(imputed.po.est, sink=file.path(outfolder,glue("{params$proptype}_{outcome}_imputed_po_est.parquet")))
+  write_parquet(imputed.po.rep, sink=file.path(outfolder,glue("{params$proptype}_{outcome}_imputed_po_rep.parquet")))
+}
+
 
 ### *** INITIAL SETUP *** ###
 
@@ -242,27 +190,25 @@ exp_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_exp_mod.rds")))
 ### *** CALCULATE DYNAMIC TREATMENT EFFECTS UNDER REPEATED TREATMENT *** ###
 
 ## 60+ days delinquent
-D60_dynamic_effects <- repeated_treatment_effects(D60_mod,panel_data,groupatt=params$groupatt)
-write_parquet(D60_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_D60_dynamic_effects.parquet")))
+D60_res <- repeated_treatment_effects(D60_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(D60_res,fitted_dir,params$proptype,"D60")
 
 ## Loss rate
-loss_rate_dynamic_effects <- repeated_treatment_effects(loss_rate_mod,panel_data,groupatt=params$groupatt)
-write_parquet(loss_rate_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_loss_rate_dynamic_effects.parquet")))
+loss_rate_res <- repeated_treatment_effects(loss_rate_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(loss_rate_res,fitted_dir,params$proptype,"loss_rate")
 
 ## Occupancy
-occ_dynamic_effects <- repeated_treatment_effects(occ_mod,panel_data,groupatt=params$groupatt)
-write_parquet(occ_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_occ_dynamic_effects.parquet")))
+occ_res <- repeated_treatment_effects(occ_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(occ_res,fitted_dir,params$proptype,"occ")
 
 ## Net operating income
-noi_dynamic_effects <- repeated_treatment_effects(noi_mod,panel_data,groupatt=params$groupatt)
-write_parquet(noi_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_noi_dynamic_effects.parquet")))
+noi_res <- repeated_treatment_effects(noi_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(noi_res,fitted_dir,params$proptype,"noi")
 
 ## Revenues
-rev_dynamic_effects <- repeated_treatment_effects(rev_mod,panel_data,groupatt=params$groupatt)
-write_parquet(rev_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_rev_dynamic_effects.parquet")))
+rev_res <- repeated_treatment_effects(rev_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(rev_res,fitted_dir,params$proptype,"rev")
 
 ## Expenses
-exp_dynamic_effects <- repeated_treatment_effects(exp_mod,panel_data,groupatt=params$groupatt)
-write_parquet(exp_dynamic_effects, sink=file.path(fitted_dir,glue("{params$proptype}_exp_dynamic_effects.parquet")))
-
-
+exp_res <- repeated_treatment_effects(exp_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(exp_res,fitted_dir,params$proptype,"exp")

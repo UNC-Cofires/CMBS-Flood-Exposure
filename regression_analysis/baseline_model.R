@@ -69,7 +69,6 @@ option_list <- list(
   make_option("--region_time_FEs",type = "logical", default = TRUE),
   make_option("--vintage_time_FEs",type = "logical", default = FALSE),
   make_option("--floodzones", type = "character", default = "FEMA_100y_floodplain,FEMA_500y_floodplain"),
-  make_option("--groupatt", type = "character", default = NULL),
   make_option("--filter_var", type = "character", default = NULL), 
   make_option("--filter_op", type = "character", default = "eq"),
   make_option("--filter_val", type = "character", default = NULL),
@@ -82,12 +81,6 @@ params <- parse_args(OptionParser(option_list = option_list))
 # Create folder for output
 outfolder <- file.path(pwd,glue("fitted_models/{params$name}/{params$proptype}"))
 dir.create(outfolder,recursive=TRUE)
-
-# Save command-line arguments as JSON
-write(
-  toJSON(params, pretty = TRUE, auto_unbox = TRUE),
-  file.path(outfolder, "params.json")
-)
 
 ### *** LOAD DATA *** ###
 
@@ -104,6 +97,7 @@ treatment_status <- treatment_status %>% rename(year = calendar_time)
 
 # Get geographic unit at which treatment is assigned
 geog_unit <- colnames(treatment_status)[1]
+params$cluster_var <- geog_unit
 
 # Merge outcome and treatment status data
 panel_data <- left_join(panel_data, treatment_status, by = c(geog_unit,"year"))
@@ -168,51 +162,57 @@ if (!is.null(params$filter_var) & !is.null(params$filter_val)) {
 # Save input data
 saveRDS(panel_data, file=file.path(outfolder,glue("{params$proptype}_data.rds")))
 
+# Save command-line arguments as JSON
+write(
+  toJSON(params, pretty = TRUE, auto_unbox = TRUE),
+  file.path(outfolder, "params.json")
+)
+
 ### *** FIT MODELS *** ###
 
-## 60-day delinqeuncy
-D60_mod <- fect(D60 ~ D, data = panel_data, group = params$groupatt,
-                index = fixed_effects, method = "cfe", force = "two-way", r=0, min.T0 = 1,
+## 60-day delinquency
+D60_mod <- fect(D60 ~ D, data = panel_data, index = fixed_effects,
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
                 nboots = params$nboots, keep.sims = TRUE)
 
 saveRDS(D60_mod, file=file.path(outfolder,glue("{params$proptype}_D60_mod.rds")))
 
 ## Loss rate
-loss_rate_mod <- fect(loss_rate ~ D, data = panel_data, group = params$groupatt,
-                index = fixed_effects, method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                nboots = params$nboots, keep.sims = TRUE)
+loss_rate_mod <- fect(loss_rate ~ D, data = panel_data, index = fixed_effects, 
+                      method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                      se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
+                      nboots = params$nboots, keep.sims = TRUE)
 
 saveRDS(loss_rate_mod, file=file.path(outfolder,glue("{params$proptype}_loss_rate_mod.rds")))
 
 ## Occupancy
-occ_mod <- fect(occ ~ D, data = panel_data, group = params$groupatt,
-                index = fixed_effects, method = "cfe", force = "two-way", r=0, min.T0 = 1,
+occ_mod <- fect(occ ~ D, data = panel_data, index = fixed_effects, 
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
                 nboots = params$nboots, keep.sims = TRUE)
 
-saveRDS(D60_mod, file=file.path(outfolder,glue("{params$proptype}_occ_mod.rds")))
+saveRDS(occ_mod, file=file.path(outfolder,glue("{params$proptype}_occ_mod.rds")))
 
 ## Net operating income
-noi_mod <- fect(log_noi ~ D, data = panel_data, group = params$groupatt,
-                index = fixed_effects, method = "cfe", force = "two-way", r=0, min.T0 = 1,
+noi_mod <- fect(log_noi ~ D, data = panel_data, index = fixed_effects,
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
                 nboots = params$nboots, keep.sims = TRUE)
 
 saveRDS(noi_mod, file=file.path(outfolder,glue("{params$proptype}_noi_mod.rds")))
 
 ## Revenues
-rev_mod <- fect(log_rev ~ D, data = panel_data, group = params$groupatt,
-                index = fixed_effects, method = "cfe", force = "two-way", r=0, min.T0 = 1,
+rev_mod <- fect(log_rev ~ D, data = panel_data, index = fixed_effects, 
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
                 nboots = params$nboots, keep.sims = TRUE)
 
 saveRDS(rev_mod, file=file.path(outfolder,glue("{params$proptype}_rev_mod.rds")))
 
 ## Expenses
-exp_mod <- fect(log_exp ~ D, data = panel_data, group = params$groupatt,
-                index = fixed_effects, method = "cfe", force = "two-way", r=0, min.T0 = 1,
+exp_mod <- fect(log_exp ~ D, data = panel_data, index = fixed_effects,
+                method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
                 nboots = params$nboots, keep.sims = TRUE)
 
