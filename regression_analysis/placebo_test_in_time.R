@@ -114,7 +114,7 @@ config <- read_yaml(config_path)
 
 # Get name of scenario and property type
 option_list <- list(
-  make_option("--name", type = "character", default = format(Sys.time(), "base_case_sfha")),
+  make_option("--name", type = "character", default = format(Sys.time(), "%Y-%m-%d_model_run")),
   make_option("--proptype", type = "character", default = "MF")
 )
 

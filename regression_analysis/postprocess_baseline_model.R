@@ -42,8 +42,6 @@ library(fect)
 # param: time_col: column corresponding to calendar time in panel_data. 
 # param: event_time_user: user-defined event time column in panel_data.
 #        Zero should correspond to period in which treatment event occurs. 
-# param: groupatt: column denoting group membership if calculating group-wise ATTs. 
-#        Defaults to NULL. 
 # param: alpha: significance level (alpha=0.05 for 95% CIs)
 #
 # returns: res: list of data frames containing ATT estimates and bootstrap replicates
