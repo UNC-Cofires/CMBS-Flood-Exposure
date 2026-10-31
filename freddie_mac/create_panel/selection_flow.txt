@@ -1,0 +1,10 @@
+
+Starting number of loans: 47524
+
+1) Dropped loans known to be delinquent when first observed. Number of loans remaining: 47524
+2) Dropped multi-property loans. Number of loans remaining: 47379
+3) Dropped multi-note loans. Number of loans remaining: 47351
+4) Dropped loans from outside list of included states. Number of loans remaining: 47348
+
+Ending number of loans: 47348 (99.63%)
+
