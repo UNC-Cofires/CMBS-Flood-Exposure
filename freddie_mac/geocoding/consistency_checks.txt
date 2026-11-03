@@ -1,0 +1,8 @@
+
+Checking for consistency across the following LLMs:
+    Qwen3.5-9B-AWQ-4bit
+    gemma-4-12B-it-AWQ-INT4
+
+Number of addresses that were consistent across LLMs: 47072 / 47348 (99.42%)
+Number of addresses that were inconsistent across LLMs: 276 / 47348 (0.58%)
+Number of addresses that were consistent but could not be parsed: 3 / 47348 (0.01%)
