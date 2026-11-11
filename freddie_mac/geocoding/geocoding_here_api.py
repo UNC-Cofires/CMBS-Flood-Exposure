@@ -43,10 +43,12 @@ def geocode_address_using_here_api(query_string,API_KEY,base_delay=0.1,max_attem
         # Get metadata on geocoding response
         try:
             results_dict = res.json()
+            geocoded_result['resultJSON'] = json.dumps(results_dict)
             geocoded_result['numResults'] = len(results_dict['items'])
             results_dict = results_dict['items'][0]
             geocoded_result['resultType'] = results_dict['resultType']
         except:
+            geocoded_result['resultJSON'] = pd.NA
             geocoded_result['numResults'] = 0
             geocoded_result['resultType'] = pd.NA
             
