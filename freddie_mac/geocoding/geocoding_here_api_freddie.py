@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import requests
 import time
+import json
 import os
 from src.utils.config import find_project_root, load_config
 
@@ -31,12 +32,15 @@ def geocode_address_using_here_api(query_string,API_KEY,base_delay=0.1,max_attem
         try:
             res = requests.get(url,params=params,timeout=10)
             status_code = res.status_code
+            result_text = res.text
         except:
             status_code = 0 # Ensure loop retries
+            result_text = pd.NA
         time.sleep(base_delay*(2**num_attempts)) # Increase delay with each failed attempt
         num_attempts += 1
     
     geocoded_result['statusCode'] = status_code
+    geocoded_result['resultText'] = result_text
 
     if status_code == 200:
 
