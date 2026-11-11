@@ -18,4 +18,4 @@ source "$PROJECT_ROOT/config.sh"
 
 conda activate $CRE_CONDA_ENV_PATH
 
-python3.12 geocoding_here_api.py
+python3.12 geocoding_here_api_freddie.py
