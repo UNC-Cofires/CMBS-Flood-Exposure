@@ -6,7 +6,7 @@
 #SBATCH --mem=32g
 #SBATCH -t 1-00:00:00
 #SBATCH --mail-type=all
-#SBATCH --job-name=combine_buildings_parcels
+#SBATCH --job-name=combine_buildings_parcels_freddie
 #SBATCH --mail-user=kieranf@email.unc.edu
 #SBATCH --array=0-50
 
@@ -19,4 +19,4 @@ source "$PROJECT_ROOT/config.sh"
 
 conda activate $CRE_CONDA_ENV_PATH
 
-python3.12 combine_buildings_parcels.py
+python3.12 combine_buildings_parcels_freddie.py
