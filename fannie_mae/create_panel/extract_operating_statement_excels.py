@@ -236,7 +236,7 @@ cleaned_data = pd.read_parquet(data_outname)
 # Drop rows corresponding to reporting periods with no data, as well as duplicated reports (keeping newest). 
 cleaned_data = cleaned_data.dropna(subset=['as_of_date','statement_ending_date'])
 cleaned_data = cleaned_data.sort_values(by=['Loan Number','Property ID','as_of_date','statement_ending_date'],ascending=False)
-cleaned_data = cleaned_data.drop_duplicates(subset=['Loan Number','Property ID','as_of_date','statement_ending_date'])
+cleaned_data = cleaned_data.drop_duplicates(subset=['Loan Number','Property ID','statement_ending_date'])
 cleaned_data = cleaned_data.reset_index(drop=True)
 cleaned_data.to_parquet(cleaned_outname)
 print(f'Wrote {len(cleaned_data)} rows to {cleaned_outname}', flush=True)
