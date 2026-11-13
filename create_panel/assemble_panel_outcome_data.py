@@ -26,6 +26,12 @@ def evaluate_delinquency(df):
 
     return df
 
+def combine_codes(x):
+    """
+    This function takes as input a pandas series and returns a comma-separated list of unique values. 
+    """
+    return x.dropna().drop_duplicates().astype('string[pyarrow]').str.cat(sep=",")
+
 ### *** INITIAL SETUP *** ###
 
 # Determine root directory of project and load configuration file
@@ -35,9 +41,7 @@ config = load_config()
 # Get current working directory 
 pwd = os.getcwd()
 
-### *** CREATE CMBS LOAN PANEL *** ###
-
-## Load data
+### *** LOAD DATA *** ###
 
 # Read in loan file 
 loan_path = os.path.join(pwd,'filtered_loans.parquet')
@@ -51,6 +55,9 @@ loan_usecols = ['masterloanidtrepp',
                 'dlqderivedcd',
                 'prepaycd',
                 'realizedloss',
+                'loanmoddate',
+                'loanmodcode',
+                'workoutcode',
                 'propname',
                 'address',
                 'city',
@@ -69,13 +76,29 @@ loans = pd.read_parquet(loan_path,columns=loan_usecols)
 
 # Read in prop file
 prop_path = os.path.join(pwd,'filtered_properties.parquet')
-prop_usecols = ['masterloanidtrepp','masterpropidtrepp','distdate','propstatus']
+prop_usecols = ['masterloanidtrepp',
+                'masterpropidtrepp',
+                'distdate',
+                'propstatus']
+
 prop = pd.read_parquet(prop_path,columns=prop_usecols)
+
+# Read in additional columns in prop file that we'll use to assess lease rollover
+lease_rollover_usecols = ['masterloanidtrepp',
+                          'distdate',
+                          'curlessee1expdt',
+                          'curlessee2expdt',
+                          'curlessee3expdt',
+                          'lesseepctcurr1',
+                          'lesseepctcurr2',
+                          'lesseepctcurr3']
+
+lease_rollover = pd.read_parquet(prop_path,columns=lease_rollover_usecols)
 
 # Attach property status to loan file
 loans = pd.merge(loans,prop,on=['masterloanidtrepp','distdate'],how='left')
 
-## Evaluate realized losses to trust from each loan
+### *** REALIZED LOSSES *** ###
 
 losses = loans[['masterloanidtrepp','distdate','origloanbal','realizedloss']]
 losses['year'] = losses['distdate'].dt.year
@@ -86,29 +109,30 @@ agg_dict = {'origloanbal':'last',
 losses = losses.groupby(['masterloanidtrepp','year']).agg(agg_dict).reset_index()
 losses['loss_rate'] = 100*losses['realizedloss']/losses['origloanbal']
 
-## Evaluate loan/property status
+### *** LOAN STATUS OVER TIME *** ###
 
 # In foreclosure or REO
 foreclosure_REO_mask = loans['propstatus'].isin([1,2])
 loans['in_foreclosure_or_REO'] = foreclosure_REO_mask.astype('int64[pyarrow]')
 
-# Defeased, released or substituted
-defeased_released_mask = loans['propstatus'].isin([3,4,5])
-
 # Paid off, prepaid, or liquidated
-# (Still count loan as "active" during the first month where a zero balance shows up
-#  so that we can capture things like realized losses to the trust) 
+# (Still count loan as "active" during the first month where a zero balance shows up)
 loans['zero_balance_flag'] = (loans['obal']==0).astype('int64[pyarrow]')
 zero_balance_mask = loans.groupby('masterloanidtrepp')['zero_balance_flag'].cumsum() > 1
 
+# Defeased, released or substituted
+# (Still count loan as "active" during the first month when defeased)
+loans['defeased_released_flag'] = loans['propstatus'].isin([3,4,5]).astype('int64[pyarrow]')
+defeased_released_mask = loans.groupby('masterloanidtrepp')['defeased_released_flag'].cumsum() > 1
+
 # Drop observations from after a loan is repaid/liquidated or a property is defeased/released/substituted
-active_mask = ~(defeased_released_mask|zero_balance_mask)
+active_mask = ~(zero_balance_mask|defeased_released_mask)
 loans = loans[active_mask]
 
 # Evaluate delinquency status of each loan over time
 loans = loans.groupby('masterloanidtrepp').apply(evaluate_delinquency).reset_index(drop=True)
 
-## Create panel of yearly property financial observations
+### *** BUILD ANNUAL PANEL *** ###
 
 agg_dict = {'distdate':['min','max'],
             'origdate':'last',
@@ -142,7 +166,7 @@ panel['vintage'] = panel['origdate'].dt.year
 panel['year'] = panel.apply(lambda x: np.arange(x['first_obs'].year,x['last_obs'].year+1),axis=1)
 panel = panel.explode('year').reset_index()
 
-## Determine loan delinquency status in each year
+### *** DELINQUENCY STATUS *** ###
 
 delinquency_status = loans[['masterloanidtrepp','distdate','D60','D90','in_foreclosure_or_REO','ever_D60','ever_D90','ever_in_foreclosure_or_REO']]
 delinquency_status['year'] = delinquency_status['distdate'].dt.year
@@ -170,7 +194,7 @@ panel = pd.merge(panel,delinquency_status,on=['masterloanidtrepp','year'],how='l
 # Also attach information on realized losses
 panel = pd.merge(panel,losses[['masterloanidtrepp','year','realizedloss','loss_rate']],on=['masterloanidtrepp','year'],how='left')
 
-## Determine property revenues, expenses, noi, and occupancy in each year
+### *** PROPERTY FINANCIALS *** ###
 
 prop_financials = loans[['masterloanidtrepp','priorfyasof','priorfyrev','priorfyexp','priorfynoi','priorfyocc']]
 rename_dict = {'priorfyasof':'year','priorfyrev':'rev','priorfyexp':'exp','priorfynoi':'noi','priorfyocc':'occ'}
@@ -184,6 +208,80 @@ panel = pd.merge(panel,prop_financials,on=['masterloanidtrepp','year'],how='left
 # Filter panel by years included in study period
 study_period_mask = (panel['year'] >= 1998)&(panel['year'] <= 2025)
 panel = panel[study_period_mask].reset_index(drop=True)
+
+### *** LEASE ROLLOVER *** ###
+
+lease_rollover['year'] = lease_rollover['distdate'].dt.year
+lease_rollover = lease_rollover.drop_duplicates(subset=['masterloanidtrepp','year'])
+
+for i in range(1,3+1):
+    lease_rollover[f'rollyear{i}'] = lease_rollover[f'curlessee{i}expdt'].dt.year
+    lease_rollover[f'next2roll{i}'] = (lease_rollover[f'rollyear{i}'] - lease_rollover['year'] < 2).astype(int)
+    lease_rollover[f'rollshare{i}'] = lease_rollover[f'lesseepctcurr{i}'].fillna(0).clip(0,100)
+
+roll_presence = lease_rollover[['next2roll1','next2roll2','next2roll3']].to_numpy()
+roll_intensity = lease_rollover[['rollshare1','rollshare2','rollshare3']].to_numpy()
+share_rolling = np.minimum((roll_presence*roll_intensity).sum(axis=1),100)
+
+missing_lease_data_mask = lease_rollover[['rollyear1','rollyear2','rollyear3']].isna().all(axis=1)
+share_rolling[missing_lease_data_mask] = np.nan
+
+lease_rollover['pctrollnext2years'] = share_rolling
+lease_rollover = lease_rollover[['masterloanidtrepp','year','pctrollnext2years']]
+
+panel = pd.merge(panel,lease_rollover,on=['masterloanidtrepp','year'],how='left')
+
+### *** REMAINING YEARS TO MATURITY *** ###
+
+remaining_maturity = loans[['masterloanidtrepp','distdate','maturitydate']]
+remaining_maturity['year'] = remaining_maturity['distdate'].dt.year
+remaining_maturity['matyear'] = remaining_maturity['maturitydate'].dt.year
+remaining_maturity['remainingterm'] = (remaining_maturity['matyear'] - remaining_maturity['year']).clip(0,None).astype('int64[pyarrow]')
+remaining_maturity = remaining_maturity.drop_duplicates(subset=['masterloanidtrepp','year'])
+remaining_maturity = remaining_maturity[['masterloanidtrepp','year','remainingterm']]
+
+panel = pd.merge(panel,remaining_maturity,on=['masterloanidtrepp','year'],how='left')
+
+### *** LOAN MODIFICATIONS / WORKOUTS *** ###
+
+modifications = loans[['masterloanidtrepp','distdate','loanmoddate','loanmodcode','workoutcode']]
+
+modified_mask = (~modifications[['loanmoddate','loanmodcode','workoutcode']].isna().all(axis=1))
+modifications = modifications[modified_mask]
+
+modifications['year'] = modifications['distdate'].dt.year
+modifications['modyear'] = modifications['loanmoddate'].dt.year
+modifications['modification_flag'] = (modifications['year'] == modifications['modyear']).astype('int64[pyarrow]')
+
+agg_dict = {'modification_flag':'max',
+            'loanmodcode': combine_codes,
+            'workoutcode': combine_codes}
+
+modifications = modifications.groupby(['masterloanidtrepp','year']).agg(agg_dict).reset_index()
+modifications['loanmodcode'] = modifications['loanmodcode'].replace('',pd.NA)
+modifications['workoutcode'] = modifications['workoutcode'].replace('',pd.NA)
+
+panel = pd.merge(panel,modifications,on=['masterloanidtrepp','year'],how='left')
+panel['modification_flag'] = panel['modification_flag'].fillna(0)
+
+### *** LOAN LIQUIDATIONS / PREPAYMENTS *** ###
+
+payoffs = loans[['masterloanidtrepp','distdate','zero_balance_flag','prepaycd','defeased_released_flag']]
+mask = (~payoffs['prepaycd'].isna())|(payoffs['zero_balance_flag']==1)|(payoffs['defeased_released_flag']==1)
+payoffs = payoffs[mask]
+
+payoffs['year'] = payoffs['distdate'].dt.year
+
+agg_dict = {'zero_balance_flag':'max',
+            'defeased_released_flag':'max',
+            'prepaycd': combine_codes}
+
+payoffs = payoffs.groupby(['masterloanidtrepp','year']).agg(agg_dict).reset_index()
+payoffs['prepaycd'] = payoffs['prepaycd'].replace('',pd.NA)
+
+panel = pd.merge(panel,payoffs,on=['masterloanidtrepp','year'],how='left')
+panel['zero_balance_flag'] = panel['zero_balance_flag'].fillna(0)
+panel['defeased_released_flag'] = panel['defeased_released_flag'].fillna(0)
 
 ### *** ATTACH BUILDING ATTRIBUTES *** ###
 
@@ -274,6 +372,14 @@ columns = ['masterloanidtrepp',
            'FEMA_500y_floodplain_indicator',
            'floodzone',
            'lumped_floodzone',
+           'pctrollnext2years',
+           'remainingterm',
+           'zero_balance_flag',
+           'prepaycd',
+           'defeased_released_flag',
+           'modification_flag',
+           'loanmodcode',
+           'workoutcode',
            'D60',
            'D90',
            'in_foreclosure_or_REO',
@@ -302,7 +408,9 @@ print(f'Number of loans in panel: {num_loans}')
 print(f'Number of loan-years in panel: {num_loan_years}\n')
 print('Population rate of key fields:')
 
-fields = ['D60',
+fields = ['zero_balance_flag',
+          'modification_flag',
+          'D60',
           'D90',
           'in_foreclosure_or_REO',
           'ever_D60',
@@ -314,7 +422,6 @@ fields = ['D60',
           'exp',
           'noi',
           'occ']
-
 
 for field in fields:
     pop_rate = (~panel[field].isna()).mean()
