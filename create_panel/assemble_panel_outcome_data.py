@@ -396,7 +396,7 @@ columns = ['masterloanidtrepp',
 panel = panel[columns]
 
 # Save to file
-outname = os.path.join(pwd,'panel_outcome_data.parquet')
+outname = os.path.join(pwd,'panel_outcome_data_trepp.parquet')
 panel.to_parquet(outname)
 
 ### *** PRINT SUMMARY FOR USER *** ###
