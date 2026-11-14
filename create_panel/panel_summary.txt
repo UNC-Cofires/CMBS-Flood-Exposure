@@ -1,16 +1,24 @@
-Number of loans in panel: 89535
-Number of loan-years in panel: 805166
+Number of loans in panel: 146064
+Number of loan-years in panel: 1065297
+
+Distribution of property types:
+    GSE-MF: 83405 loans (57.1%), 494793 loan-years (46.4%)
+    RT: 27441 loans (18.8%), 259866 loan-years (24.4%)
+    MF: 20078 loans (13.7%), 173359 loan-years (16.3%)
+    OF: 15140 loans (10.4%), 137279 loan-years (12.9%)
 
 Population rate of key fields:
+    zero_balance_flag: 100.0%
+    modification_flag: 100.0%
     D60: 99.9%
     D90: 99.9%
     in_foreclosure_or_REO: 99.9%
     ever_D60: 99.9%
     ever_D90: 99.9%
     ever_in_foreclosure_or_REO: 99.9%
-    realizedloss: 100.0%
-    loss_rate: 97.1%
-    rev: 76.8%
-    exp: 75.7%
-    noi: 76.5%
-    occ: 71.2%
+    realizedloss: 99.9%
+    loss_rate: 98.4%
+    rev: 66.5%
+    exp: 65.9%
+    noi: 66.3%
+    occ: 62.9%
