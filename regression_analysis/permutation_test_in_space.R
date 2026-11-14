@@ -178,6 +178,10 @@ save_result_as_parquet(res,fitted_dir,proptype,"D60")
 res <- permutation_test("loss_rate",panel_data,treatment_status,params,nperm,num_cores)
 save_result_as_parquet(res,fitted_dir,proptype,"loss_rate")
 
+## Liquidations/Prepayments
+res <- permutation_test("zero_balance_flag",panel_data,treatment_status,params,nperm,num_cores)
+save_result_as_parquet(res,fitted_dir,proptype,"zero_balance")
+
 ## Occupancy
 res <- permutation_test("occ",panel_data,treatment_status,params,nperm,num_cores)
 save_result_as_parquet(res,fitted_dir,proptype,"occ")
@@ -194,4 +198,6 @@ save_result_as_parquet(res,fitted_dir,proptype,"rev")
 res <- permutation_test("log_exp",panel_data,treatment_status,params,nperm,num_cores)
 save_result_as_parquet(res,fitted_dir,proptype,"exp")
 
-
+## Missing NOI data
+res <- permutation_test("missing_noi",panel_data,treatment_status,params,nperm,num_cores)
+save_result_as_parquet(res,fitted_dir,proptype,"missing_noi")

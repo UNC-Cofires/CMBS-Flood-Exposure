@@ -8,150 +8,59 @@
 #SBATCH --mail-type=all
 #SBATCH --job-name=baseline_model
 #SBATCH --mail-user=kieranf@email.unc.edu
-#SBATCH --array=0,1
+#SBATCH --array=0,1,2,3
 
 module purge
 module load r/4.5.0
 
 # List of property types
-PROPTYPES=("MF" "RT" "OF" "IN" "LO")
+PROPTYPES=("GSE-MF" "MF" "RT" "OF")
 
 # Specific property type to run
 PROPTYPE=${PROPTYPES[$SLURM_ARRAY_TASK_ID]}
 
 # Number of bootstrap replicates drawn when computing SEs
-NBOOTS=500
+NBOOTS=100
 
-# Base case: SFHA
+# Base case
 Rscript baseline_model.R \
---name "base_case_sfha" \
+--name "base_case" \
 --treatment_scenario "zipcode_base_case" \
---floodzones "FEMA_100y_floodplain" \
+--floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
-Rscript postprocess_baseline_model.R --name "base_case_sfha" --proptype $PROPTYPE
+Rscript postprocess_baseline_model.R --name "base_case" --proptype $PROPTYPE
 
-# In-time placebo test for pre-trends: SFHA
-
+# Placebo test for pre-trends
 Rscript baseline_model.R \
---name "placebo_pretrend_sfha" \
---treatment_scenario "zipcode_base_case" \
---treatment_variable "under_placebo" \
---event_time "time_since_placebo_event" \
---filter_var "under_treatment" \
---filter_val 0 \
---floodzones "FEMA_100y_floodplain" \
---proptype $PROPTYPE \
---nboots $NBOOTS
-
-Rscript postprocess_baseline_model.R --name "placebo_pretrend_sfha" --proptype $PROPTYPE
-Rscript placebo_test_in_time.R --name "placebo_pretrend_sfha" --proptype $PROPTYPE
-
-# In-time placebo test for carryover effects: SFHA
-
-Rscript baseline_model.R \
---name "placebo_carryover_sfha" \
---treatment_scenario "zipcode_base_case" \
---treatment_variable "under_carryover" \
---event_time "time_since_carryover_event" \
---filter_var "under_treatment" \
---filter_val 0 \
---floodzones "FEMA_100y_floodplain" \
---proptype $PROPTYPE \
---nboots $NBOOTS
-
-Rscript postprocess_baseline_model.R --name "placebo_carryover_sfha" --proptype $PROPTYPE
-Rscript placebo_test_in_time.R --name "placebo_carryover_sfha" --proptype $PROPTYPE
-
-# Test for spatial spillover effects: SFHA
-
-Rscript baseline_model.R \
---name "spillover_sfha" \
---treatment_scenario "zipcode_base_case" \
---treatment_variable "under_spillover" \
---event_time "time_since_spillover_event" \
---filter_var "under_treatment" \
---filter_val 0 \
---floodzones "FEMA_100y_floodplain" \
---proptype $PROPTYPE \
---nboots $NBOOTS
-
-Rscript postprocess_baseline_model.R --name "spillover_sfha" --proptype $PROPTYPE
-
-# Gridcell: SFHA
-Rscript baseline_model.R \
---name "gridcell_sfha" \
---treatment_scenario "gridcell_base_case" \
---floodzones "FEMA_100y_floodplain" \
---proptype $PROPTYPE \
---nboots $NBOOTS
-
-Rscript postprocess_baseline_model.R --name "gridcell_sfha" --proptype $PROPTYPE
-
-# Base case: Non-SFHA
-Rscript baseline_model.R \
---name "base_case_nonsfha" \
---treatment_scenario "zipcode_base_case" \
---floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
---proptype $PROPTYPE \
---nboots $NBOOTS
-
-Rscript postprocess_baseline_model.R --name "base_case_nonsfha" --proptype $PROPTYPE
-
-# In-time placebo test for pre-trends: Non-SFHA
-
-Rscript baseline_model.R \
---name "placebo_pretrend_nonsfha" \
+--name "base_case_placebo" \
 --treatment_scenario "zipcode_base_case" \
 --treatment_variable "under_placebo" \
 --event_time "time_since_placebo_event" \
 --filter_var "under_treatment" \
 --filter_val 0 \
---floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
+--floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
-Rscript postprocess_baseline_model.R --name "placebo_pretrend_nonsfha" --proptype $PROPTYPE
-Rscript placebo_test_in_time.R --name "placebo_pretrend_nonsfha" --proptype $PROPTYPE
+Rscript postprocess_baseline_model.R --name "base_case_placebo" --proptype $PROPTYPE
+Rscript placebo_test_in_time.R --name "base_case_placebo" --proptype $PROPTYPE
 
-# In-time placebo test for carryover effects: Non-SFHA
-
+# Placebo test for carryover effects
 Rscript baseline_model.R \
---name "placebo_carryover_nonsfha" \
+--name "base_case_carryover" \
 --treatment_scenario "zipcode_base_case" \
 --treatment_variable "under_carryover" \
 --event_time "time_since_carryover_event" \
 --filter_var "under_treatment" \
 --filter_val 0 \
---floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
+--floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
-Rscript postprocess_baseline_model.R --name "placebo_carryover_nonsfha" --proptype $PROPTYPE
-Rscript placebo_test_in_time.R --name "placebo_carryover_nonsfha" --proptype $PROPTYPE
+Rscript postprocess_baseline_model.R --name "base_case_carryover" --proptype $PROPTYPE
+Rscript placebo_test_in_time.R --name "base_case_carryover" --proptype $PROPTYPE
 
-# Test for spatial spillover effects: Non-SFHA
-
-Rscript baseline_model.R \
---name "spillover_nonsfha" \
---treatment_scenario "zipcode_base_case" \
---treatment_variable "under_spillover" \
---event_time "time_since_spillover_event" \
---filter_var "under_treatment" \
---filter_val 0 \
---floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
---proptype $PROPTYPE \
---nboots $NBOOTS
-
-Rscript postprocess_baseline_model.R --name "spillover_nonsfha" --proptype $PROPTYPE
-
-# Gridcell: Non-SFHA
-Rscript baseline_model.R \
---name "gridcell_nonsfha" \
---treatment_scenario "gridcell_base_case" \
---floodzones "FEMA_500y_floodplain,outside_FEMA_floodplains" \
---proptype $PROPTYPE \
---nboots $NBOOTS
-
-Rscript postprocess_baseline_model.R --name "gridcell_nonsfha" --proptype $PROPTYPE
+# Spatial permutation test
+Rscript permutation_test_in_space.R --name "base_case" --proptype $PROPTYPE

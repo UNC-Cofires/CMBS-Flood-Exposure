@@ -67,7 +67,6 @@ option_list <- list(
   make_option("--treatment_variable", type = "character", default = "under_treatment"),
   make_option("--event_time", type = "character", default = "time_since_treatment_event"),
   make_option("--region_time_FEs",type = "logical", default = TRUE),
-  make_option("--vintage_time_FEs",type = "logical", default = FALSE),
   make_option("--floodzones", type = "character", default = "FEMA_100y_floodplain,FEMA_500y_floodplain"),
   make_option("--filter_var", type = "character", default = NULL), 
   make_option("--filter_op", type = "character", default = "eq"),
@@ -85,7 +84,7 @@ dir.create(outfolder,recursive=TRUE)
 ### *** LOAD DATA *** ###
 
 # Longitudinal data on property financial outcomes
-panel_data_path <- file.path(project_root,"create_panel/panel_outcome_data.parquet")
+panel_data_path <- file.path(project_root,"create_panel/panel_outcome_data_combined.parquet")
 panel_data <- read_parquet(panel_data_path)
 
 # Neighborhood-level treatment status
@@ -124,20 +123,15 @@ panel_data$missing_occ <- as.integer(is.na(panel_data$occ))
 # Region x Time
 panel_data$region_time <- interaction(panel_data$cbsa_title, panel_data$year)
 
-# Vintage x Time
-panel_data$vintage_time <- interaction(panel_data$vintage, panel_data$year)
-
 # At a minimum, include unit and time FEs
-fixed_effects <- c("masterloanidtrepp","year")
+fixed_effects <- c("loanid","year")
 
 # Add additional FEs as desired
 if (params$region_time_FEs){
   fixed_effects <- c(fixed_effects,"region_time")
 }
 
-if (params$vintage_time_FEs){
-  fixed_effects <- c(fixed_effects,"vintage_time")
-}
+params$fixed_effects <- fixed_effects
 
 ### *** SPECIFY TREATMENT VARIABLE *** ###
 
@@ -151,7 +145,7 @@ floodzone_mask <- (panel_data$floodzone %in% included_floodzones)
 panel_data <- panel_data[floodzone_mask,]
 
 # Property type
-proptype_mask <- (panel_data$cssaproptype == params$proptype)
+proptype_mask <- (panel_data$proptype == params$proptype)
 panel_data <- panel_data[proptype_mask,]
 
 # Additional filters
@@ -161,6 +155,7 @@ if (!is.null(params$filter_var) & !is.null(params$filter_val)) {
 
 # Save input data
 saveRDS(panel_data, file=file.path(outfolder,glue("{params$proptype}_data.rds")))
+write_parquet(panel_data, sink=file.path(outfolder,glue("{params$proptype}_data.parquet")))
 
 # Save command-line arguments as JSON
 write(
@@ -170,7 +165,7 @@ write(
 
 ### *** FIT MODELS *** ###
 
-## 60-day delinquency
+## 60+ days delinquent
 D60_mod <- fect(D60 ~ D, data = panel_data, index = fixed_effects,
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,
                 se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
@@ -185,6 +180,14 @@ loss_rate_mod <- fect(loss_rate ~ D, data = panel_data, index = fixed_effects,
                       nboots = params$nboots, keep.sims = TRUE)
 
 saveRDS(loss_rate_mod, file=file.path(outfolder,glue("{params$proptype}_loss_rate_mod.rds")))
+
+## Liquidations/Prepayments
+zero_balance_mod <- fect(zero_balance_flag ~ D, data = panel_data, index = fixed_effects, 
+                         method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                         se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
+                         nboots = params$nboots, keep.sims = TRUE)
+
+saveRDS(zero_balance_mod, file=file.path(outfolder,glue("{params$proptype}_zero_balance_mod.rds")))
 
 ## Occupancy
 occ_mod <- fect(occ ~ D, data = panel_data, index = fixed_effects, 
@@ -217,3 +220,11 @@ exp_mod <- fect(log_exp ~ D, data = panel_data, index = fixed_effects,
                 nboots = params$nboots, keep.sims = TRUE)
 
 saveRDS(exp_mod, file=file.path(outfolder,glue("{params$proptype}_exp_mod.rds")))
+
+## Missing NOI data
+missing_noi_mod <- fect(missing_noi ~ D, data = panel_data, index = fixed_effects,
+                        method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                        se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
+                        nboots = params$nboots, keep.sims = TRUE)
+
+saveRDS(missing_noi_mod, file=file.path(outfolder,glue("{params$proptype}_missing_noi_mod.rds")))

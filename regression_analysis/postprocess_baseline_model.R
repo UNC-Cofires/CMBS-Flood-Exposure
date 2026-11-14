@@ -49,7 +49,7 @@ library(fect)
 
 repeated_treatment_effects <- function(mod,
                                        panel_data,
-                                       id_col="masterloanidtrepp",
+                                       id_col="loanid",
                                        time_col="year",
                                        event_time_user="time_since_treatment_event",
                                        alpha=0.05){
@@ -180,10 +180,12 @@ params <- fromJSON(file.path(fitted_dir,"params.json"))
 panel_data <- readRDS(file.path(fitted_dir,glue("{params$proptype}_data.rds")))
 D60_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_D60_mod.rds")))
 loss_rate_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_loss_rate_mod.rds")))
+zero_balance_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_zero_balance_mod.rds")))
 occ_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_occ_mod.rds")))
 noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_noi_mod.rds")))
 rev_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_rev_mod.rds")))
 exp_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_exp_mod.rds")))
+missing_noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_missing_noi_mod.rds")))
 
 ### *** CALCULATE DYNAMIC TREATMENT EFFECTS UNDER REPEATED TREATMENT *** ###
 
@@ -194,6 +196,10 @@ save_result_as_parquet(D60_res,fitted_dir,params$proptype,"D60")
 ## Loss rate
 loss_rate_res <- repeated_treatment_effects(loss_rate_mod,panel_data,event_time_user=params$event_time)
 save_result_as_parquet(loss_rate_res,fitted_dir,params$proptype,"loss_rate")
+
+## Liquidations/Prepayments
+zero_balance_res <- repeated_treatment_effects(zero_balance_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(zero_balance_res,fitted_dir,params$proptype,"zero_balance")
 
 ## Occupancy
 occ_res <- repeated_treatment_effects(occ_mod,panel_data,event_time_user=params$event_time)
@@ -210,3 +216,7 @@ save_result_as_parquet(rev_res,fitted_dir,params$proptype,"rev")
 ## Expenses
 exp_res <- repeated_treatment_effects(exp_mod,panel_data,event_time_user=params$event_time)
 save_result_as_parquet(exp_res,fitted_dir,params$proptype,"exp")
+
+## Missing NOI data
+missing_noi_res <- repeated_treatment_effects(missing_noi_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(missing_noi_res,fitted_dir,params$proptype,"missing_noi")
