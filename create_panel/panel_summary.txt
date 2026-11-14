@@ -1,8 +1,8 @@
 Number of loans in panel: 146064
-Number of loan-years in panel: 1065297
+Number of loan-years in panel: 1065277
 
 Distribution of property types:
-    GSE-MF: 83405 loans (57.1%), 494793 loan-years (46.4%)
+    GSE-MF: 83405 loans (57.1%), 494773 loan-years (46.4%)
     RT: 27441 loans (18.8%), 259866 loan-years (24.4%)
     MF: 20078 loans (13.7%), 173359 loan-years (16.3%)
     OF: 15140 loans (10.4%), 137279 loan-years (12.9%)
