@@ -217,8 +217,9 @@ panel = pd.merge(panel,remaining_maturity,on=['Loan Number','year'],how='left')
 
 ### *** LOAN MODIFICATIONS / WORKOUTS *** ###
 
-modifications = loans[['Loan Number','Most Recent Modification Date']].dropna().drop_duplicates()
+modifications = loans[['Loan Number','Most Recent Modification Date']].dropna()
 modifications['year'] = modifications['Most Recent Modification Date'].dt.year
+modifications = modifications.drop(columns=['Most Recent Modification Date']).drop_duplicates()
 modifications['modification_flag'] = 1
 
 panel = pd.merge(panel,modifications[['Loan Number','year','modification_flag']],on=['Loan Number','year'],how='left')
