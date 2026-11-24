@@ -90,15 +90,15 @@ repeated_treatment_effects <- function(mod,
   
   post_treatment <- po |> 
     group_by(across(all_of(event_time_user))) |> 
-    summarise(estimate = mean(eff, na.rm = TRUE), n_cells = dplyr::n())
+    summarize(estimate = mean(eff, na.rm = TRUE), n_cells = dplyr::n())
   
   rep_est <- po_rep |> 
     group_by(across(all_of(c(event_time_user,"replicate")))) |> 
-    summarise(estimate = mean(eff, na.rm = TRUE))
+    summarize(estimate = mean(eff, na.rm = TRUE))
   
   se_est <- rep_est |> 
     group_by(across(all_of(event_time_user))) |> 
-    summarise(se = sd(estimate))
+    summarize(se = sd(estimate))
   
   post_treatment <- left_join(post_treatment,se_est, by=event_time_user)
   
@@ -179,8 +179,6 @@ params <- fromJSON(file.path(fitted_dir,"params.json"))
 
 panel_data <- readRDS(file.path(fitted_dir,glue("{params$proptype}_data.rds")))
 D60_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_D60_mod.rds")))
-loss_rate_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_loss_rate_mod.rds")))
-zero_balance_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_zero_balance_mod.rds")))
 occ_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_occ_mod.rds")))
 noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_noi_mod.rds")))
 rev_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_rev_mod.rds")))
@@ -192,14 +190,6 @@ missing_noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_missing_
 ## 60+ days delinquent
 D60_res <- repeated_treatment_effects(D60_mod,panel_data,event_time_user=params$event_time)
 save_result_as_parquet(D60_res,fitted_dir,params$proptype,"D60")
-
-## Loss rate
-loss_rate_res <- repeated_treatment_effects(loss_rate_mod,panel_data,event_time_user=params$event_time)
-save_result_as_parquet(loss_rate_res,fitted_dir,params$proptype,"loss_rate")
-
-## Liquidations/Prepayments
-zero_balance_res <- repeated_treatment_effects(zero_balance_mod,panel_data,event_time_user=params$event_time)
-save_result_as_parquet(zero_balance_res,fitted_dir,params$proptype,"zero_balance")
 
 ## Occupancy
 occ_res <- repeated_treatment_effects(occ_mod,panel_data,event_time_user=params$event_time)

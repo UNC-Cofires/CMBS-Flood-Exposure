@@ -129,8 +129,6 @@ panel_data <- readRDS(file.path(fitted_dir,glue("{params$proptype}_data.rds")))
 
 # Postprocessed ATT estimates and bootstrap replicates
 D60_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_D60_postprocessed.rds")))
-loss_rate_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_loss_rate_postprocessed.rds")))
-zero_balance_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_zero_balance_postprocessed.rds")))
 occ_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_occ_postprocessed.rds")))
 noi_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_noi_postprocessed.rds")))
 rev_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_rev_postprocessed.rds")))
@@ -144,8 +142,6 @@ placebo_test_results <- list()
 
 # Conduct in-time placebo tests for each outcome
 placebo_test_results$D60 <- in_time_placebo_test(D60_res, panel_data, params)
-placebo_test_results$loss_rate <- in_time_placebo_test(loss_rate_res, panel_data, params)
-placebo_test_results$zero_balance <- in_time_placebo_test(zero_balance_res, panel_data, params)
 placebo_test_results$occ <- in_time_placebo_test(occ_res, panel_data, params)
 placebo_test_results$noi <- in_time_placebo_test(noi_res, panel_data, params)
 placebo_test_results$rev <- in_time_placebo_test(rev_res, panel_data, params)

@@ -173,22 +173,6 @@ D60_mod <- fect(D60 ~ D, data = panel_data, index = fixed_effects,
 
 saveRDS(D60_mod, file=file.path(outfolder,glue("{params$proptype}_D60_mod.rds")))
 
-## Loss rate
-loss_rate_mod <- fect(loss_rate ~ D, data = panel_data, index = fixed_effects, 
-                      method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                      se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                      nboots = params$nboots, keep.sims = TRUE)
-
-saveRDS(loss_rate_mod, file=file.path(outfolder,glue("{params$proptype}_loss_rate_mod.rds")))
-
-## Liquidations/Prepayments
-zero_balance_mod <- fect(zero_balance_flag ~ D, data = panel_data, index = fixed_effects, 
-                         method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                         se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                         nboots = params$nboots, keep.sims = TRUE)
-
-saveRDS(zero_balance_mod, file=file.path(outfolder,glue("{params$proptype}_zero_balance_mod.rds")))
-
 ## Occupancy
 occ_mod <- fect(occ ~ D, data = panel_data, index = fixed_effects, 
                 method = "cfe", force = "two-way", r=0, min.T0 = 1,

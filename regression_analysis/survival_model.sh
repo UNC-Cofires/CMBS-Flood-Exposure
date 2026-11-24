@@ -1,0 +1,70 @@
+#!/bin/bash
+
+#SBATCH -p general
+#SBATCH -N 1
+#SBATCH -n 8
+#SBATCH --mem=200g
+#SBATCH -t 2-00:00:00
+#SBATCH --mail-type=all
+#SBATCH --job-name=survival_model
+#SBATCH --mail-user=kieranf@email.unc.edu
+#SBATCH --array=0,1,2,3
+
+module purge
+module load r/4.5.0
+
+# List of property types
+PROPTYPES=("GSE-MF" "MF" "RT" "OF")
+
+# Specific property type to run
+PROPTYPE=${PROPTYPES[$SLURM_ARRAY_TASK_ID]}
+
+# Number of bootstrap replicates drawn when computing SEs
+NBOOTS=100
+
+# Base case
+Rscript survival_model.R \
+--name "surv_base_case" \
+--treatment_scenario "zipcode_base_case" \
+--floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS
+
+# Placebo test for pre-trends
+Rscript survival_model.R \
+--name "surv_base_case_placebo" \
+--treatment_scenario "zipcode_base_case" \
+--treatment_variable "under_placebo" \
+--treatment_event "placebo_event" \
+--event_time "time_since_placebo_event" \
+--filter_var "under_treatment" \
+--filter_val 0 \
+--floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS
+
+# Placebo test for carryover effects
+Rscript survival_model.R \
+--name "surv_base_case_carryover" \
+--treatment_scenario "zipcode_base_case" \
+--treatment_variable "under_carryover" \
+--treatment_event "carryover_event" \
+--event_time "time_since_carryover_event" \
+--filter_var "under_treatment" \
+--filter_val 0 \
+--floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS
+
+# Placebo test for spillover effects
+Rscript survival_model.R \
+--name "surv_base_case_spillover" \
+--treatment_scenario "zipcode_base_case" \
+--treatment_variable "under_spillover" \
+--treatment_event "spillover_event" \
+--event_time "time_since_spillover_event" \
+--filter_var "under_treatment" \
+--filter_val 0 \
+--floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS

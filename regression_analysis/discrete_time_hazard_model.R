@@ -2,21 +2,21 @@ library(dplyr)
 library(tidyr)
 library(fixest)
 
-# Function to estimate the causal effect of flood exposure 
-# on the cumulative incidence function (CIF) under competing risks
+# Function to impute the untreated cumulative incidence function 
+# of the target event under competing risks. 
 
-counterfactual_cumulative_incidence <- function(data,
-                                                id_col="loanid",
-                                                time_col="year",
-                                                event_time_col="time_since_treatment_event",
-                                                treatment_event_col="treatment_event",
-                                                under_treatment_col="under_treatment",
-                                                target_outcome="D60",
-                                                competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
-                                                baseline_hazard_strata="vintage_term",
-                                                region_strata="cbsa_title",
-                                                iter=50000,
-                                                tol=1e-6){
+impute_cif <- function(data,
+                       id_col="loanid",
+                       time_col="year",
+                       event_time_col="time_since_treatment_event",
+                       treatment_event_col="treatment_event",
+                       under_treatment_col="under_treatment",
+                       target_outcome="D60",
+                       competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
+                       baseline_hazard_strata="vintage_term",
+                       region_strata="cbsa_title",
+                       iter=50000,
+                       tol=1e-6){
   
   # Make sure required columns are present
   required_cols <- c(id_col,
@@ -49,7 +49,7 @@ counterfactual_cumulative_incidence <- function(data,
   
   # Create indicator variables for event of interest + competing events
   data$Y_target <- as.integer(data[[target_outcome]] == 1)
-  data$Y_competing <- as.integer(rowSums(data[,competing_outcomes]) >= 1)
+  data$Y_competing <- as.integer(rowSums(data[,competing_outcomes, drop = FALSE]) >= 1)
   data$Y_competing <- as.integer((data$Y_competing == 1)&(data$Y_target != 1))
   data$Y_any <- as.integer((data$Y_target==1)|(data$Y_competing == 1))
   
@@ -140,8 +140,9 @@ counterfactual_cumulative_incidence <- function(data,
   p_any <- p_target + p_competing
   
   # Because we fit separate binomial models, sum of all-cause probabilities
-  # can sometimes exceed one. This is very rare, but when it happens, we'll need
-  # to re-normalize the output probabilities while preserving relative share of
+  # can sometimes exceed one. Assuming you have a numerically-stable and well-fit
+  # outcome model, then this occurence should be rare. However, when it happens, 
+  # we'll need to to normalize the output probabilities while preserving share of
   # each event cause.
   adjusted_mask <- (p_any > 1.0)
   p_target[adjusted_mask] <- p_target[adjusted_mask]/p_any[adjusted_mask]
@@ -149,7 +150,7 @@ counterfactual_cumulative_incidence <- function(data,
   p_any[adjusted_mask] <- 1.0
   
   # Save counterfactual hazard estimates
-  treatment_cohorts$adjustd_prob <- adjusted_mask
+  treatment_cohorts$adjusted_prob <- adjusted_mask
   treatment_cohorts$h0_target <- p_target
   treatment_cohorts$h0_competing <- p_competing
   treatment_cohorts$h0_any <- p_any
@@ -158,23 +159,149 @@ counterfactual_cumulative_incidence <- function(data,
   treatment_cohorts <- treatment_cohorts %>% 
     group_by(id,g) %>% 
     mutate(S0 = lag(cumprod(1 - h0_any), n = 1, default = 1.0),
-           F0 = cumsum(S0*h0_target),
-           F_delta = F_obs - F0) %>%
+           F0_hat = cumsum(S0*h0_target),
+           F_delta = F_obs - F0_hat) %>%
     ungroup()
   
   # Aggregate by relative time since treatment
   att.est <- treatment_cohorts %>% 
     group_by(r) %>% 
     summarize(
-      F1 = mean(F_obs),
-      F0 = mean(F0),
-      ATT = mean(F_obs - F0),
+      F_obs = mean(F_obs),
+      F0_hat = mean(F0_hat),
+      ATT = mean(F_obs - F0_hat),
       n = n())
   
-  # Save results
-  res <- list()
-  res$att <- att.est
-  res$imputed.po <- treatment_cohorts
+  # Save data and results as list
+  res <- list(att=att.est,
+              imputed.po=treatment_cohorts)
+  
+  return(res)
+}
+
+# Function to re-sample data by cluster with replacement
+
+cluster_bootstrap <- function(data,cluster_var="zipcode",unit_id="loanid"){
+  
+  cluster_ids <- unique(data[[cluster_var]])
+  num_clusters <- length(cluster_ids)
+  
+  resampled_data <- data.frame(
+    draw_id = paste0("draw",seq(1:num_clusters)),
+    cluster_id = sample(cluster_ids, size = num_clusters, replace = TRUE)
+  )
+  
+  resampled_data <- left_join(resampled_data,
+                              data,
+                              by=c("cluster_id" = cluster_var),
+                              relationship = "many-to-many")
+  
+  resampled_data$pseudo_id <- paste(resampled_data$draw_id,resampled_data[[unit_id]],sep="-")
+  
+  return(resampled_data)
+}
+
+# Function to estimate the effect of treatment on the cumulative incidence
+# of the target event, plus associated standard errors. 
+
+counterfactual_cumulative_incidence <- function(data,
+                                                id_col="loanid",
+                                                time_col="year",
+                                                event_time_col="time_since_treatment_event",
+                                                treatment_event_col="treatment_event",
+                                                under_treatment_col="under_treatment",
+                                                target_outcome="D60",
+                                                competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
+                                                baseline_hazard_strata="vintage_term",
+                                                region_strata="cbsa_title",
+                                                cluster_var="zipcode",
+                                                nboot=200,
+                                                alpha=0.05,
+                                                iter=50000,
+                                                tol=1e-6){
+  
+  # Get point estimate of ATT
+  res <- impute_cif(data,
+                    id_col=id_col,
+                    time_col=time_col,
+                    event_time_col=event_time_col,
+                    under_treatment_col=under_treatment_col,
+                    target_outcome=target_outcome,
+                    competing_outcomes=competing_outcomes,
+                    baseline_hazard_strata=baseline_hazard_strata,
+                    region_strata=region_strata,
+                    iter=iter,
+                    tol=tol)
+  
+  att.est <- res$att
+  imputed.po.est <- res$imputed.po
+  
+  # Get bootstrap replicates of ATT
+  att.boot.list <- vector("list", length = nboot)
+  imputed.po.boot.list <- vector("list", length = nboot)
+  
+  for (i in 1:nboot){
+    
+    replicate_data <- cluster_bootstrap(data,cluster_var=cluster_var,unit_id=id_col)
+
+    res <- impute_cif(replicate_data,
+                      id_col="pseudo_id",
+                      time_col=time_col,
+                      event_time_col=event_time_col,
+                      under_treatment_col=under_treatment_col,
+                      target_outcome=target_outcome,
+                      competing_outcomes=competing_outcomes,
+                      baseline_hazard_strata=baseline_hazard_strata,
+                      region_strata=region_strata,
+                      iter=iter,
+                      tol=tol)
+    
+    att.rep <- res$att
+    imputed.po.rep <- res$imputed.po
+    
+    # Replace pseudo unit ids with actual unit ids
+    id_lookup <- distinct(replicate_data[,c(id_col,"pseudo_id")]) %>% rename(id := !!id_col)
+    
+    imputed.po.rep <- imputed.po.rep %>%
+      rename(pseudo_id = id) %>%
+      left_join(id_lookup,by="pseudo_id") %>%
+      select(-pseudo_id) %>% 
+      relocate(id)
+    
+    att.rep$replicate <- i
+    imputed.po.rep$replicate <- i
+    
+    att.boot.list[[i]] <- att.rep
+    imputed.po.boot.list[[i]] <- imputed.po.rep
+    
+  }
+  
+  # Concatenate bootstrapped estimates
+  att.rep <- bind_rows(att.boot.list)
+  imputed.po.rep <- bind_rows(imputed.po.boot.list)
+  
+  # Rename columns
+  att.est <- att.est %>% select(c("r","F_obs","F0_hat","ATT","n")) %>% rename(n_cells = n)
+  att.rep <- att.rep %>% select(c("r","F_obs","F0_hat","ATT","replicate"))
+  
+  # Calculate bootstrapped SEs and CIs for ATT estimates
+  se.est <- att.rep %>%
+    group_by(r) %>%
+    summarize(se = sd(ATT))
+  
+  att.est <- left_join(att.est,se.est,by="r")
+  
+  z <- qnorm(1-alpha/2)
+  att.est$ci.lo <- att.est$ATT - z*att.est$se
+  att.est$ci.hi <- att.est$ATT + z*att.est$se
+  
+  att.est <- att.est %>% relocate(n_cells, .after = last_col())
+  
+  # Combine data into a single object and return results 
+  res <- list(att.est=att.est,
+              att.rep=att.rep,
+              imputed.po.est=imputed.po.est,
+              imputed.po.rep=imputed.po.rep)
   
   return(res)
 }
