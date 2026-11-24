@@ -18,7 +18,7 @@ Population rate of key fields:
     ever_in_foreclosure_or_REO: 99.9%
     realizedloss: 99.9%
     loss_rate: 98.4%
-    rev: 66.5%
-    exp: 65.9%
-    noi: 66.3%
-    occ: 62.9%
+    rev: 72.6%
+    exp: 72.0%
+    noi: 72.4%
+    occ: 69.0%
