@@ -2,7 +2,7 @@
 
 #SBATCH -p general
 #SBATCH -N 1
-#SBATCH -n 8
+#SBATCH -n 1
 #SBATCH --mem=200g
 #SBATCH -t 2-00:00:00
 #SBATCH --mail-type=all
