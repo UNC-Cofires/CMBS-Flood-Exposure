@@ -45,7 +45,7 @@ Rscript baseline_model.R \
 --nboots $NBOOTS
 
 Rscript postprocess_baseline_model.R --name "base_case_placebo" --proptype $PROPTYPE
-Rscript placebo_test_in_time.R --name "base_case_placebo" --proptype $PROPTYPE
+Rscript placebo_test_baseline_model.R --name "base_case_placebo" --proptype $PROPTYPE
 
 # Placebo test for carryover effects
 Rscript baseline_model.R \
@@ -60,7 +60,7 @@ Rscript baseline_model.R \
 --nboots $NBOOTS
 
 Rscript postprocess_baseline_model.R --name "base_case_carryover" --proptype $PROPTYPE
-Rscript placebo_test_in_time.R --name "base_case_carryover" --proptype $PROPTYPE
+Rscript placebo_test_baseline_model.R --name "base_case_carryover" --proptype $PROPTYPE
 
 # Spatial permutation test
-Rscript permutation_test_in_space.R --name "base_case" --proptype $PROPTYPE
+Rscript permutation_test_baseline_model.R --name "base_case" --proptype $PROPTYPE
