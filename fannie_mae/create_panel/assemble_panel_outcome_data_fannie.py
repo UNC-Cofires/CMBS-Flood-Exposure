@@ -45,6 +45,7 @@ loan_orig_path = os.path.join(pwd,'filtered_loans_fannie.parquet')
 usecols = ['Loan Number',
            'Property ID',
            'Property Specific Property Type',
+           'Property Year Built',
            'Property Total Units',
            'Property Name',
            'Property Address',
@@ -63,6 +64,8 @@ usecols = ['Loan Number',
            'Original UPB',
            'UPB - Current',
            'Maturity Date - Current',
+           'Loan Acquisition LTV',
+           'Underwritten DSCR',
            'Loan Payment Status',
            'Liquidation/Prepayment Code',
            'Liquidation/Prepayment Date',
@@ -129,6 +132,8 @@ agg_dict = {'Reporting Period Date':['min','max'],
             'Note Date':'last',
             'maturitydate':'last',
             'Original UPB':'last',
+            'Loan Acquisition LTV':'last',
+            'Underwritten DSCR':'last',
             'Property ID':'last',
             'Property Name':'last',
             'Property Address':'last',
@@ -136,6 +141,7 @@ agg_dict = {'Reporting Period Date':['min','max'],
             'Property State':'last',
             'Property Zip Code':'last',
             'Property Specific Property Type':'last',
+            'Property Year Built':'last',
             'Property Total Units':'last'}
 
 panel = loans.groupby('Loan Number').agg(agg_dict)
@@ -194,8 +200,10 @@ operating_statements['occ'] = operating_statements['occupancy_rate']
 operating_statements['rev'] = operating_statements['effective_gross_income']
 operating_statements['exp'] = operating_statements['total_operating_expenses']
 operating_statements['noi'] = operating_statements['rev'] - operating_statements['exp']
+operating_statements['total_debt_service'] = operating_statements[['debt_service_a_note','debt_service_b_note','debt_service_c_note']].fillna(0).sum(axis=1)
+operating_statements['dscr'] = operating_statements['noi']/operating_statements['total_debt_service']
 
-prop_financials = operating_statements[['Loan Number','year','occ','rev','exp','noi']]
+prop_financials = operating_statements[['Loan Number','year','occ','rev','exp','noi','dscr']]
 
 # Attach to panel data
 panel = pd.merge(panel,prop_financials,on=['Loan Number','year'],how='left')
@@ -258,24 +266,26 @@ buildings['longitude'] = buildings['point_geometry'].x
 buildings['censustract_2010'] = buildings['censusblockgroup_2010'].map(lambda x: x[:11], na_action='ignore')
 
 # Aggregate attributes from structures associated with a given property
-agg_dict = {'latitude':'first',
-            'longitude':'first',
-            'countyfips_2022':'first',
-            'censustract_2010':'first',
-            'zcta_2020':'first',
-            'BUILD_ID':'count',
-            'FEMA_100y_floodplain_indicator':'max',
-            'FEMA_500y_floodplain_indicator':'max'}
+agg_dict = {'latitude':('latitude','first'),
+            'longitude':('longitude','first'),
+            'countyfips_2022':('countyfips_2022','first'),
+            'censustract_2010':('censustract_2010','first'),
+            'zcta_2020':('zcta_2020','first'),
+            'num_structures':('BUILD_ID','count'),
+            'FEMA_100y_floodplain_indicator':('FEMA_100y_floodplain_indicator','max'),
+            'FEMA_500y_floodplain_indicator':('FEMA_500y_floodplain_indicator','max'),
+            'structure_FEMA_100y_share':('FEMA_100y_floodplain_indicator','mean'),
+            'structure_FEMA_500y_share':('FEMA_500y_floodplain_indicator','mean')}
 
-building_attributes = buildings.groupby('Loan Number').agg(agg_dict)
+building_attributes = buildings.groupby('Loan Number').agg(**agg_dict)
 
 building_attributes['FEMA_500y_floodplain_indicator'] = ((building_attributes['FEMA_500y_floodplain_indicator']==1)&(building_attributes['FEMA_100y_floodplain_indicator']==0)).astype(int)
 building_attributes['floodzone'] = pd.from_dummies(building_attributes[['FEMA_100y_floodplain_indicator','FEMA_500y_floodplain_indicator']],default_category='outside_FEMA_floodplains')
 building_attributes['floodzone'] = building_attributes['floodzone'].str.replace('_indicator','')
 building_attributes['lumped_floodzone'] = building_attributes['floodzone'].apply(lambda x: 'inside_FEMA_floodplains' if x != 'outside_FEMA_floodplains' else x)
+building_attributes['structure_floodplain_share'] = building_attributes['structure_FEMA_100y_share'] + building_attributes['structure_FEMA_500y_share']
 
-building_attributes = building_attributes.rename(columns={'BUILD_ID':'num_structures'}).reset_index()
-
+building_attributes = building_attributes.reset_index()
 panel = pd.merge(panel,building_attributes,on='Loan Number',how='inner')
 
 # Create 0.1 x 0.1 degree lat/lon gridcell identifier
@@ -299,6 +309,8 @@ rename_dict = {'zcta_2020':'zipcode',
                'Loan Number':'loanid',
                'Note Date':'origdate',
                'Original UPB':'origloanbal',
+               'Loan Acquisition LTV':'securltv',
+               'Underwritten DSCR':'securdscr',
                'Property ID':'propid',
                'Property Name':'propname',
                'Property Address':'address',
@@ -306,6 +318,7 @@ rename_dict = {'zcta_2020':'zipcode',
                'Property State':'state',
                'Property Zip Code':'zip',
                'Property Specific Property Type':'proptype',
+               'Property Year Built':'propyear',
                'Property Total Units':'units'}
 
 panel.rename(columns=rename_dict, inplace=True)
@@ -318,9 +331,12 @@ columns = ['loanid',
            'origdate',
            'origloanbal',
            'maturitydate',
+           'securltv',
+           'securdscr',
            'vintage',
            'propid',
            'proptype',
+           'propyear',
            'units',
            'num_structures',
            'propname',
@@ -343,6 +359,7 @@ columns = ['loanid',
            'FEMA_500y_floodplain_indicator',
            'floodzone',
            'lumped_floodzone',
+           'structure_floodplain_share',
            'remainingterm',
            'zero_balance_flag',
            'defeased_released_flag',
@@ -358,6 +375,7 @@ columns = ['loanid',
            'rev',
            'exp',
            'noi',
+           'dscr',
            'occ']
 
 panel = panel[columns]
@@ -388,6 +406,7 @@ fields = ['zero_balance_flag',
           'rev',
           'exp',
           'noi',
+          'dscr',
           'occ']
 
 for field in fields:
