@@ -190,6 +190,10 @@ save_result_as_parquet(res,fitted_dir,proptype,"rev")
 res <- permutation_test("log_exp",panel_data,treatment_status,params,nperm,num_cores)
 save_result_as_parquet(res,fitted_dir,proptype,"exp")
 
+## DSCR < 1.0
+res <- permutation_test("dscr_below_one",panel_data,treatment_status,params,nperm,num_cores)
+save_result_as_parquet(res,fitted_dir,proptype,"dscr_below_one")
+
 ## Missing NOI data
 res <- permutation_test("missing_noi",panel_data,treatment_status,params,nperm,num_cores)
 save_result_as_parquet(res,fitted_dir,proptype,"missing_noi")

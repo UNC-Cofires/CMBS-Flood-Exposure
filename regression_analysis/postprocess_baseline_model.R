@@ -183,6 +183,7 @@ occ_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_occ_mod.rds")))
 noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_noi_mod.rds")))
 rev_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_rev_mod.rds")))
 exp_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_exp_mod.rds")))
+dscr_below_one_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_dscr_below_one_mod.rds")))
 missing_noi_mod <- readRDS(file.path(fitted_dir,glue("{params$proptype}_missing_noi_mod.rds")))
 
 ### *** CALCULATE DYNAMIC TREATMENT EFFECTS UNDER REPEATED TREATMENT *** ###
@@ -206,6 +207,10 @@ save_result_as_parquet(rev_res,fitted_dir,params$proptype,"rev")
 ## Expenses
 exp_res <- repeated_treatment_effects(exp_mod,panel_data,event_time_user=params$event_time)
 save_result_as_parquet(exp_res,fitted_dir,params$proptype,"exp")
+
+## DSCR < 1.0
+dscr_below_one_res <- repeated_treatment_effects(dscr_below_one_mod,panel_data,event_time_user=params$event_time)
+save_result_as_parquet(dscr_below_one_res,fitted_dir,params$proptype,"dscr_below_one")
 
 ## Missing NOI data
 missing_noi_res <- repeated_treatment_effects(missing_noi_mod,panel_data,event_time_user=params$event_time)

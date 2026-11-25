@@ -133,6 +133,7 @@ occ_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_occ_postprocesse
 noi_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_noi_postprocessed.rds")))
 rev_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_rev_postprocessed.rds")))
 exp_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_exp_postprocessed.rds")))
+dscr_below_one_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_dscr_below_one_postprocessed.rds")))
 missing_noi_res <- readRDS(file.path(fitted_dir,glue("{params$proptype}_missing_noi_postprocessed.rds")))
 
 ### *** CONDUCT IN-TIME PLACEBO TESTS FOR PRE-TRENDS / CARRYOVER EFFECTS *** ###
@@ -146,6 +147,7 @@ placebo_test_results$occ <- in_time_placebo_test(occ_res, panel_data, params)
 placebo_test_results$noi <- in_time_placebo_test(noi_res, panel_data, params)
 placebo_test_results$rev <- in_time_placebo_test(rev_res, panel_data, params)
 placebo_test_results$exp <- in_time_placebo_test(exp_res, panel_data, params)
+placebo_test_results$dscr_below_one <- in_time_placebo_test(dscr_below_one_res, panel_data, params)
 placebo_test_results$missing_noi <- in_time_placebo_test(missing_noi_res, panel_data, params)
 
 ### *** SAVE RESULTS *** ###

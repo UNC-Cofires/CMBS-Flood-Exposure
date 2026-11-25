@@ -111,12 +111,28 @@ panel_data$log_rev <- log(pmax(panel_data$rev,1))
 panel_data$log_exp <- log(pmax(panel_data$exp,1))
 panel_data$log_noi <- log(pmax(panel_data$noi,1))
 
+### *** CREATE INDICATOR FOR DSCR < 1.0 *** ###
+
+panel_data$dscr_below_one <- as.integer(panel_data$dscr < 1.0)
+
 ### *** CREATE INDICATORS FOR MISSING FINANCIAL METRICS *** ###
 
-panel_data$missing_rev <- as.integer(is.na(panel_data$rev))
-panel_data$missing_exp <- as.integer(is.na(panel_data$exp))
-panel_data$missing_noi <- as.integer(is.na(panel_data$noi))
-panel_data$missing_occ <- as.integer(is.na(panel_data$occ))
+# Property financials are typically not reported for the first 
+# and last year of the loan. As such, only count as missing during
+# intermediate years of the loan's life. 
+first_year <- as.integer(format(panel_data$first_obs, "%Y"))
+last_year <- as.integer(format(panel_data$last_obs, "%Y"))
+
+# If a loan is paid off early in the year (e.g., January) then 
+# it's likely that the financial data is also missing for the preceding year.
+last_month <- as.integer(format(panel_data$last_obs, "%m"))
+last_year[last_month <= 6] <- last_year[last_month <= 6] - 1
+
+available_year_mask <- (panel_data$year > first_year) & (panel_data$year < last_year)
+
+# Record for whether a loan is missing NOI during a year when we'd expect to have it
+missing_noi_mask <- (available_year_mask) & (is.na(panel_data$noi))
+panel_data$missing_noi <- as.integer(missing_noi_mask)
 
 ### *** SPECIFY FIXED EFFECTS *** ###
 
@@ -204,6 +220,14 @@ exp_mod <- fect(log_exp ~ D, data = panel_data, index = fixed_effects,
                 nboots = params$nboots, keep.sims = TRUE)
 
 saveRDS(exp_mod, file=file.path(outfolder,glue("{params$proptype}_exp_mod.rds")))
+
+## DSCR < 1.0
+dscr_below_one_mod <- fect(dscr_below_one ~ D, data = panel_data, index = fixed_effects,
+                           method = "cfe", force = "two-way", r=0, min.T0 = 1,
+                           se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
+                           nboots = params$nboots, keep.sims = TRUE)
+
+saveRDS(dscr_below_one_mod, file=file.path(outfolder,glue("{params$proptype}_dscr_below_one_mod.rds")))
 
 ## Missing NOI data
 missing_noi_mod <- fect(missing_noi ~ D, data = panel_data, index = fixed_effects,
