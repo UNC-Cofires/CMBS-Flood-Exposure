@@ -114,6 +114,7 @@ fields = ['zero_balance_flag',
           'rev',
           'exp',
           'noi',
+          'dscr',
           'occ']
 
 for field in fields:
