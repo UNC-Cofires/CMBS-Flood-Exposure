@@ -96,20 +96,6 @@ option_list <- list(
   make_option("--nboots",    type = "integer",   default = 200)
 )
 
-option_list <- list(
-  make_option("--name", type = "character", default = format(Sys.time(), "%Y-%m-%d_hazard_model")),
-  make_option("--treatment_scenario", type = "character", default = "zipcode_base_case"),
-  make_option("--treatment_variable", type = "character", default = "under_carryover"),
-  make_option("--treatment_event", type = "character", default = "carryover_event"),
-  make_option("--event_time", type = "character", default = "time_since_carryover_event"),
-  make_option("--floodzones", type = "character", default = "FEMA_100y_floodplain,FEMA_500y_floodplain"),
-  make_option("--filter_var", type = "character", default = "under_treatment"), 
-  make_option("--filter_op", type = "character", default = "eq"),
-  make_option("--filter_val", type = "character", default = "0"),
-  make_option("--proptype", type = "character", default = "MF"),
-  make_option("--nboots",    type = "integer",   default = 5)
-)
-
 params <- parse_args(OptionParser(option_list = option_list))
 
 # Create folder for output
