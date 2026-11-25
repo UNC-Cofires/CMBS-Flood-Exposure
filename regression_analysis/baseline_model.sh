@@ -62,5 +62,17 @@ Rscript baseline_model.R \
 Rscript postprocess_baseline_model.R --name "base_case_carryover" --proptype $PROPTYPE
 Rscript placebo_test_baseline_model.R --name "base_case_carryover" --proptype $PROPTYPE
 
-# Spatial permutation test
-Rscript permutation_test_baseline_model.R --name "base_case" --proptype $PROPTYPE
+# Placebo test for spillover effects
+Rscript baseline_model.R \
+--name "base_case_spillover" \
+--treatment_scenario "zipcode_base_case" \
+--treatment_variable "under_spillover" \
+--event_time "time_since_spillover_event" \
+--filter_var "under_treatment" \
+--filter_val 0 \
+--floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
+--proptype $PROPTYPE \
+--nboots $NBOOTS
+
+Rscript postprocess_baseline_model.R --name "base_case_spillover" --proptype $PROPTYPE
+Rscript placebo_test_baseline_model.R --name "base_case_spillover" --proptype $PROPTYPE
