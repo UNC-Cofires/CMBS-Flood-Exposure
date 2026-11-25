@@ -43,6 +43,8 @@ Rscript survival_model.R \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
+Rscript placebo_test_survival_model.R --name "surv_base_case_placebo" --proptype $PROPTYPE
+
 # Placebo test for carryover effects
 Rscript survival_model.R \
 --name "surv_base_case_carryover" \
@@ -56,6 +58,8 @@ Rscript survival_model.R \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
+Rscript placebo_test_survival_model.R --name "surv_base_case_carryover" --proptype $PROPTYPE
+
 # Placebo test for spillover effects
 Rscript survival_model.R \
 --name "surv_base_case_spillover" \
@@ -68,3 +72,5 @@ Rscript survival_model.R \
 --floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
+
+Rscript placebo_test_survival_model.R --name "surv_base_case_spillover" --proptype $PROPTYPE

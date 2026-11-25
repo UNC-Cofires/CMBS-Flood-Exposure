@@ -19,5 +19,11 @@ PROPTYPES=("GSE-MF" "MF" "RT" "OF")
 # Specific property type to run
 PROPTYPE=${PROPTYPES[$SLURM_ARRAY_TASK_ID]}
 
+# Number of times to permute treatment assignments
+NPERM=100
+
 # Spatial permutation test for property financial outcomes
-Rscript permutation_test_baseline_model.R --name "base_case" --proptype $PROPTYPE
+Rscript permutation_test_baseline_model.R --name "base_case" --proptype $PROPTYPE --nperm $NPERM
+
+# Spatial permutation test for loan repayment outcomes
+Rscript permutation_test_survival_model.R --name "surv_base_case" --proptype $PROPTYPE --nperm $NPERM
