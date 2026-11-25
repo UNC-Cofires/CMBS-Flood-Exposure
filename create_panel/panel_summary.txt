@@ -21,4 +21,5 @@ Population rate of key fields:
     rev: 72.6%
     exp: 72.0%
     noi: 72.4%
+    dscr: 72.4%
     occ: 69.0%
