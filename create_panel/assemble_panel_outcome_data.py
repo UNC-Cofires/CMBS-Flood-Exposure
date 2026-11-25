@@ -52,6 +52,8 @@ loan_usecols = ['masterloanidtrepp',
                 'maturitydate',
                 'origloanbal',
                 'obal',
+                'securltv',
+                'securdscr',
                 'dlqderivedcd',
                 'prepaycd',
                 'realizedloss',
@@ -64,12 +66,14 @@ loan_usecols = ['masterloanidtrepp',
                 'state',
                 'zip',
                 'cssaproptype',
+                'propyear',
                 'units',
                 'rentarea',
                 'priorfyasof',
                 'priorfyrev',
                 'priorfyexp',
                 'priorfynoi',
+                'priorfydscr',
                 'priorfyocc']
 
 loans = pd.read_parquet(loan_path,columns=loan_usecols)
@@ -138,6 +142,8 @@ agg_dict = {'distdate':['min','max'],
             'origdate':'last',
             'maturitydate':'last',
             'origloanbal':'last',
+            'securltv':'last',
+            'securdscr':'last',
             'masterpropidtrepp':'last',
             'propname':'last',
             'address':'last',
@@ -145,6 +151,7 @@ agg_dict = {'distdate':['min','max'],
             'state':'last',
             'zip':'last',
             'cssaproptype':'last',
+            'propyear':'last',
             'units':'last',
             'rentarea':'last'}
 
@@ -196,8 +203,8 @@ panel = pd.merge(panel,losses[['masterloanidtrepp','year','realizedloss','loss_r
 
 ### *** PROPERTY FINANCIALS *** ###
 
-prop_financials = loans[['masterloanidtrepp','priorfyasof','priorfyrev','priorfyexp','priorfynoi','priorfyocc']]
-rename_dict = {'priorfyasof':'year','priorfyrev':'rev','priorfyexp':'exp','priorfynoi':'noi','priorfyocc':'occ'}
+prop_financials = loans[['masterloanidtrepp','priorfyasof','priorfyrev','priorfyexp','priorfynoi','priorfydscr','priorfyocc']]
+rename_dict = {'priorfyasof':'year','priorfyrev':'rev','priorfyexp':'exp','priorfynoi':'noi','priorfydscr':'dscr','priorfyocc':'occ'}
 prop_financials = prop_financials.rename(columns=rename_dict).dropna(subset=['year'])
 prop_financials['year'] = prop_financials['year'].dt.year
 prop_financials = prop_financials.drop_duplicates(subset=['masterloanidtrepp','year'],keep='last')
@@ -298,24 +305,26 @@ buildings['longitude'] = buildings['point_geometry'].x
 buildings['censustract_2010'] = buildings['censusblockgroup_2010'].map(lambda x: x[:11], na_action='ignore')
 
 # Aggregate attributes from structures associated with a given property
-agg_dict = {'latitude':'first',
-            'longitude':'first',
-            'countyfips_2022':'first',
-            'censustract_2010':'first',
-            'zcta_2020':'first',
-            'BUILD_ID':'count',
-            'FEMA_100y_floodplain_indicator':'max',
-            'FEMA_500y_floodplain_indicator':'max'}
+agg_dict = {'latitude':('latitude','first'),
+            'longitude':('longitude','first'),
+            'countyfips_2022':('countyfips_2022','first'),
+            'censustract_2010':('censustract_2010','first'),
+            'zcta_2020':('zcta_2020','first'),
+            'num_structures':('BUILD_ID','count'),
+            'FEMA_100y_floodplain_indicator':('FEMA_100y_floodplain_indicator','max'),
+            'FEMA_500y_floodplain_indicator':('FEMA_500y_floodplain_indicator','max'),
+            'structure_FEMA_100y_share':('FEMA_100y_floodplain_indicator','mean'),
+            'structure_FEMA_500y_share':('FEMA_500y_floodplain_indicator','mean')}
 
-building_attributes = buildings.groupby('masterloanidtrepp').agg(agg_dict)
+building_attributes = buildings.groupby('masterloanidtrepp').agg(**agg_dict)
 
 building_attributes['FEMA_500y_floodplain_indicator'] = ((building_attributes['FEMA_500y_floodplain_indicator']==1)&(building_attributes['FEMA_100y_floodplain_indicator']==0)).astype(int)
 building_attributes['floodzone'] = pd.from_dummies(building_attributes[['FEMA_100y_floodplain_indicator','FEMA_500y_floodplain_indicator']],default_category='outside_FEMA_floodplains')
 building_attributes['floodzone'] = building_attributes['floodzone'].str.replace('_indicator','')
 building_attributes['lumped_floodzone'] = building_attributes['floodzone'].apply(lambda x: 'inside_FEMA_floodplains' if x != 'outside_FEMA_floodplains' else x)
+building_attributes['structure_floodplain_share'] = building_attributes['structure_FEMA_100y_share'] + building_attributes['structure_FEMA_500y_share']
 
-building_attributes = building_attributes.rename(columns={'BUILD_ID':'num_structures'}).reset_index()
-
+building_attributes = building_attributes.reset_index()
 panel = pd.merge(panel,building_attributes,on='masterloanidtrepp',how='inner')
 
 # Create 0.1 x 0.1 degree lat/lon gridcell identifier
@@ -347,8 +356,11 @@ columns = ['masterloanidtrepp',
            'origloanbal',
            'maturitydate',
            'vintage',
+           'securltv',
+           'securdscr',
            'masterpropidtrepp',
            'cssaproptype',
+           'propyear',
            'units',
            'rentarea',
            'num_structures',
@@ -372,6 +384,7 @@ columns = ['masterloanidtrepp',
            'FEMA_500y_floodplain_indicator',
            'floodzone',
            'lumped_floodzone',
+           'structure_floodplain_share',
            'pctrollnext2years',
            'remainingterm',
            'zero_balance_flag',
@@ -391,6 +404,7 @@ columns = ['masterloanidtrepp',
            'rev',
            'exp',
            'noi',
+           'dscr',
            'occ']
 
 panel = panel[columns]
@@ -421,6 +435,7 @@ fields = ['zero_balance_flag',
           'rev',
           'exp',
           'noi',
+          'dscr',
           'occ']
 
 for field in fields:
