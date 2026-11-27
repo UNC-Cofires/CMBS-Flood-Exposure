@@ -7,7 +7,10 @@ library(arrow)
 library(parallelly)
 library(dplyr)
 library(panelView)
-library(fect)
+library(fixest)
+
+# Load user-defined functions for imputing potential outcomes
+source("imputation_estimators.R")
 
 ### *** HELPER FUNCTIONS *** ###
 
@@ -46,6 +49,24 @@ apply_filter <- function(df, var, op, val) {
   return(df[keep, , drop = FALSE])
 }
 
+# Function to save results
+save_result_as_parquet <- function(res,outfolder,proptype,outcome){
+  
+  # Save object as RDS file
+  saveRDS(res, file=file.path(outfolder,glue("{params$proptype}_{outcome}_did.rds")))
+  
+  att.est <- res$att.est
+  att.rep <- res$att.rep
+  imputed.po.est <- res$imputed.po.est
+  imputed.po.rep <- res$imputed.po.rep
+  
+  # Save data as parquet file
+  write_parquet(att.est, sink=file.path(outfolder,glue("{params$proptype}_{outcome}_att_est.parquet")))
+  write_parquet(att.rep, sink=file.path(outfolder,glue("{params$proptype}_{outcome}_att_rep.parquet")))
+  write_parquet(imputed.po.est, sink=file.path(outfolder,glue("{params$proptype}_{outcome}_imputed_po_est.parquet")))
+  write_parquet(imputed.po.rep, sink=file.path(outfolder,glue("{params$proptype}_{outcome}_imputed_po_rep.parquet")))
+}
+
 ### *** INITIAL SETUP *** ###
 
 # Get current working directory and project root
@@ -66,9 +87,8 @@ option_list <- list(
   make_option("--treatment_scenario", type = "character", default = "zipcode_base_case"),
   make_option("--treatment_variable", type = "character", default = "under_treatment"),
   make_option("--event_time", type = "character", default = "time_since_treatment_event"),
-  make_option("--region_time_FEs",type = "logical", default = TRUE),
   make_option("--floodzones", type = "character", default = "FEMA_100y_floodplain,FEMA_500y_floodplain"),
-  make_option("--filter_var", type = "character", default = NULL), 
+  make_option("--filter_var", type = "character", default = NULL),
   make_option("--filter_op", type = "character", default = "eq"),
   make_option("--filter_val", type = "character", default = NULL),
   make_option("--proptype", type = "character", default = "MF"),
@@ -134,24 +154,10 @@ available_year_mask <- (panel_data$year > first_year) & (panel_data$year < last_
 missing_noi_mask <- (available_year_mask) & (is.na(panel_data$noi))
 panel_data$missing_noi <- as.integer(missing_noi_mask)
 
-### *** SPECIFY FIXED EFFECTS *** ###
+### *** STRATIFY TIME FIXED EFFECTS BY METRO *** ###
 
 # Region x Time
 panel_data$region_time <- interaction(panel_data$cbsa_title, panel_data$year)
-
-# At a minimum, include unit and time FEs
-fixed_effects <- c("loanid","year")
-
-# Add additional FEs as desired
-if (params$region_time_FEs){
-  fixed_effects <- c(fixed_effects,"region_time")
-}
-
-params$fixed_effects <- fixed_effects
-
-### *** SPECIFY TREATMENT VARIABLE *** ###
-
-panel_data$D <- panel_data[[params$treatment_variable]]
 
 ### *** FILTER AND SUBSET DATA *** ###
 
@@ -182,57 +188,94 @@ write(
 ### *** FIT MODELS *** ###
 
 ## 60+ days delinquent
-D60_mod <- fect(D60 ~ D, data = panel_data, index = fixed_effects,
-                method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                nboots = params$nboots, keep.sims = TRUE)
+D60_res <- did_counterfactual_imputation(panel_data,
+                                         outcome_col="D60",
+                                         id_col="loanid",
+                                         time_col="year",
+                                         event_time_col=params$event_time,
+                                         under_treatment_col=params$treatment_variable,
+                                         time_fe_col="region_time",
+                                         cluster_var=geog_unit,
+                                         nboot=params$nboots)
 
-saveRDS(D60_mod, file=file.path(outfolder,glue("{params$proptype}_D60_mod.rds")))
+save_result_as_parquet(D60_res,outfolder,params$proptype,"D60")
 
 ## Occupancy
-occ_mod <- fect(occ ~ D, data = panel_data, index = fixed_effects, 
-                method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                nboots = params$nboots, keep.sims = TRUE)
+occ_res <- did_counterfactual_imputation(panel_data,
+                                         outcome_col="occ",
+                                         id_col="loanid",
+                                         time_col="year",
+                                         event_time_col=params$event_time,
+                                         under_treatment_col=params$treatment_variable,
+                                         time_fe_col="region_time",
+                                         cluster_var=geog_unit,
+                                         nboot=params$nboots)
 
-saveRDS(occ_mod, file=file.path(outfolder,glue("{params$proptype}_occ_mod.rds")))
+save_result_as_parquet(occ_res,outfolder,params$proptype,"occ")
 
 ## Net operating income
-noi_mod <- fect(log_noi ~ D, data = panel_data, index = fixed_effects,
-                method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                nboots = params$nboots, keep.sims = TRUE)
+noi_res <- did_counterfactual_imputation(panel_data,
+                                         outcome_col="log_noi",
+                                         id_col="loanid",
+                                         time_col="year",
+                                         event_time_col=params$event_time,
+                                         under_treatment_col=params$treatment_variable,
+                                         time_fe_col="region_time",
+                                         cluster_var=geog_unit,
+                                         nboot=params$nboots)
 
-saveRDS(noi_mod, file=file.path(outfolder,glue("{params$proptype}_noi_mod.rds")))
+save_result_as_parquet(noi_res,outfolder,params$proptype,"noi")
 
 ## Revenues
-rev_mod <- fect(log_rev ~ D, data = panel_data, index = fixed_effects, 
-                method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                nboots = params$nboots, keep.sims = TRUE)
+rev_res <- did_counterfactual_imputation(panel_data,
+                                         outcome_col="log_rev",
+                                         id_col="loanid",
+                                         time_col="year",
+                                         event_time_col=params$event_time,
+                                         under_treatment_col=params$treatment_variable,
+                                         time_fe_col="region_time",
+                                         cluster_var=geog_unit,
+                                         nboot=params$nboots)
 
-saveRDS(rev_mod, file=file.path(outfolder,glue("{params$proptype}_rev_mod.rds")))
+save_result_as_parquet(rev_res,outfolder,params$proptype,"rev")
 
 ## Expenses
-exp_mod <- fect(log_exp ~ D, data = panel_data, index = fixed_effects,
-                method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                nboots = params$nboots, keep.sims = TRUE)
+exp_res <- did_counterfactual_imputation(panel_data,
+                                         outcome_col="log_exp",
+                                         id_col="loanid",
+                                         time_col="year",
+                                         event_time_col=params$event_time,
+                                         under_treatment_col=params$treatment_variable,
+                                         time_fe_col="region_time",
+                                         cluster_var=geog_unit,
+                                         nboot=params$nboots)
 
-saveRDS(exp_mod, file=file.path(outfolder,glue("{params$proptype}_exp_mod.rds")))
+save_result_as_parquet(exp_res,outfolder,params$proptype,"exp")
 
 ## DSCR < 1.0
-dscr_below_one_mod <- fect(dscr_below_one ~ D, data = panel_data, index = fixed_effects,
-                           method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                           se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                           nboots = params$nboots, keep.sims = TRUE)
+dscr_below_one_res <- did_counterfactual_imputation(panel_data,
+                                                    outcome_col="dscr_below_one",
+                                                    id_col="loanid",
+                                                    time_col="year",
+                                                    event_time_col=params$event_time,
+                                                    under_treatment_col=params$treatment_variable,
+                                                    time_fe_col="region_time",
+                                                    cluster_var=geog_unit,
+                                                    nboot=params$nboots)
 
-saveRDS(dscr_below_one_mod, file=file.path(outfolder,glue("{params$proptype}_dscr_below_one_mod.rds")))
+save_result_as_parquet(dscr_below_one_res,outfolder,params$proptype,"dscr_below_one")
 
 ## Missing NOI data
-missing_noi_mod <- fect(missing_noi ~ D, data = panel_data, index = fixed_effects,
-                        method = "cfe", force = "two-way", r=0, min.T0 = 1,
-                        se = TRUE, cl = geog_unit, parallel = TRUE, cores = num_cores,
-                        nboots = params$nboots, keep.sims = TRUE)
+missing_noi_res <- did_counterfactual_imputation(panel_data,
+                                                 outcome_col="missing_noi",
+                                                 id_col="loanid",
+                                                 time_col="year",
+                                                 event_time_col=params$event_time,
+                                                 under_treatment_col=params$treatment_variable,
+                                                 time_fe_col="region_time",
+                                                 cluster_var=geog_unit,
+                                                 nboot=params$nboots)
 
-saveRDS(missing_noi_mod, file=file.path(outfolder,glue("{params$proptype}_missing_noi_mod.rds")))
+save_result_as_parquet(missing_noi_res,outfolder,params$proptype,"missing_noi")
+
+

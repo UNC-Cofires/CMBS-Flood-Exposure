@@ -9,20 +9,22 @@ library(dplyr)
 library(tidyr)
 library(fixest)
 
-# Load user-defined functions for building discrete-time hazard models
-source("discrete_time_hazard_model.R")
+# Load user-defined functions
+source("imputation_estimators.R")
 
 ### *** HELPER FUNCTIONS *** ###
 
-permute_treatment_history <- function(panel_data,
+permute_treatment_history <- function(data,
                                       treatment_status,
                                       cluster_var,
+                                      time_col,
                                       event_time_user,
                                       treatment_variable,
                                       treatment_event){
   # panel_data: data used in estimation sample
   # treatment_status: neighborhood-level treatment assignment data frame
   # cluster_var: column name denoting level at which treatment is assigned (e.g., "zipcode")
+  # time_col: column name denoting time period (e.g., "year")
   # event_time_user: user-defined event time column name 
   # treatment_variable: user-defined treatment status indicator column name
   # treatment_event: user-defined treatment event indicator column name
@@ -38,7 +40,7 @@ permute_treatment_history <- function(panel_data,
     rename("{cluster_var}":="recipient_cluster") %>% 
     select(all_of(c(cluster_var,"year",treatment_variable,treatment_event,event_time_user)))
   
-  shuffled_data <- panel_data %>% select(-all_of(c(treatment_variable,treatment_event,event_time_user))) %>% left_join(shuffled_treatment,by = c(cluster_var,"year"))
+  shuffled_data <- panel_data %>% select(-all_of(c(treatment_variable,treatment_event,event_time_user))) %>% left_join(shuffled_treatment,by = c(cluster_var,time_col))
   
   return(shuffled_data)
 }
@@ -85,6 +87,7 @@ permutation_test <- function(data,
     shuffled_data <- permute_treatment_history(data,
                                                treatment_status,
                                                cluster_var,
+                                               time_col,
                                                event_time_col,
                                                under_treatment_col,
                                                treatment_event_col)

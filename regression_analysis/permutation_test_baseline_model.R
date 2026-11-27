@@ -7,17 +7,25 @@ library(arrow)
 library(parallelly)
 library(dplyr)
 library(panelView)
-library(fect)
+
+# Load user-defined functions
+source("imputation_estimators.R")
 
 ### *** HELPER FUNCTIONS *** ###
 
-permute_treatment_history <- function(panel_data,treatment_status,params){
+permute_treatment_history <- function(data,
+                                      treatment_status,
+                                      cluster_var,
+                                      time_col,
+                                      event_time_user,
+                                      treatment_variable){
   # panel_data: data used in estimation sample
   # treatment_status: neighborhood-level treatment assignment data frame
-  # params: named list containing options used in model fitting process
-  
-  cluster_var <- params$cluster_var
-  event_time_user <- params$event_time
+  # cluster_var: column name denoting level at which treatment is assigned (e.g., "zipcode")
+  # time_col: column name denoting time period (e.g., "year")
+  # event_time_user: user-defined event time column name 
+  # treatment_variable: user-defined treatment status indicator column name
+
   clusters <- unique(treatment_status[[cluster_var]])
   
   shuffled_clusters <- data.frame(recipient_cluster=clusters,donor_cluster=clusters)
@@ -27,60 +35,38 @@ permute_treatment_history <- function(panel_data,treatment_status,params){
   
   shuffled_treatment <- shuffled_treatment %>% 
     rename("{cluster_var}":="recipient_cluster") %>% 
-    select(all_of(c(cluster_var,"year","D",event_time_user)))
+    select(all_of(c(cluster_var,"year",treatment_variable,event_time_user)))
   
-  shuffled_data <- panel_data %>% select(-all_of(c("D",event_time_user))) %>% left_join(shuffled_treatment,by = c(cluster_var,"year"))
+  shuffled_data <- panel_data %>% select(-all_of(c(treatment_variable,event_time_user))) %>% left_join(shuffled_treatment,by = c(cluster_var,time_col))
   
   return(shuffled_data)
 }
 
-# This function re-estimates the model without computing standard errors
-estimate_model <- function(outcome_var,panel_data,params,num_cores){
-  # param: outcome_var: outcome variable
-  # param: data: data used in estimation sample
-  # param: params: named list of options used in model fitting workflow
-  # param: num_cores: number of available CPU cores
-  
-  panel_data$Y <- panel_data[[outcome_var]]
-  
-  # Fit fect model object
-  mod <- fect(Y ~ D, data = panel_data, index = params$fixed_effects,
-              method = "cfe", force = "two-way", r=0, min.T0 = 1,
-              se = FALSE, parallel = TRUE, cores = num_cores)
-  
-  # Calculate ATT during post-treatment periods while accounting for repeated exposure
-  id_col <- params$fixed_effects[1]
-  time_col <- params$fixed_effects[2]
-  event_time_user <- params$event_time
-  repeated_event_time <- panel_data[,c(id_col,time_col,event_time_user)]
-  
-  # Get Y_obs and Y0_hat estimates imputed by fect
-  po <- imputed_outcomes(mod)
-  
-  # Attach corrected version of event time that accounts for how time since
-  # treatment will "reset" under repeated flood exposure
-  po <- left_join(po,repeated_event_time,by=c("id"=id_col,"time"=time_col))
-  
-  ## Aggregate ITEs to estimate ATT during each post-treatment period
-  
-  dynamic_effects <- po |> 
-    group_by(across(all_of(event_time_user))) |> 
-    summarise(estimate = mean(eff, na.rm = TRUE))
-  
-  return(dynamic_effects)
-}
+permutation_test <- function(data,
+                             id_col="loanid",
+                             time_col="year",
+                             event_time_col="time_since_treatment_event",
+                             under_treatment_col="under_treatment",
+                             outcome_col="occ",
+                             time_fe_col="region_time",
+                             cluster_var="zipcode",
+                             nperm=1000,
+                             iter=50000,
+                             tol=1e-6){
 
-permutation_test <- function(outcome_var,panel_data,treatment_status,params,nperm,num_cores){
-  # outcome_var: outcome variable of interest
-  # panel_data: data used in estimation sample
-  # treatment_status: neighborhood-level treatment assignment data frame
-  # params: named list containing options used in model fitting process
-  # nperm: number of times to permute treatment assignments
-  # num_cores: number of available CPU cores
   
   # Compute ATT using actual treatment histories
-  att.est <- estimate_model(outcome_var,panel_data,params,num_cores)
-  att.est <- att.est %>% rename(estimate.actual=estimate)
+  res <- impute_did(data,
+                    id_col=id_col,
+                    time_col=time_col,
+                    event_time_col=event_time_col,
+                    under_treatment_col=under_treatment_col,
+                    outcome_col=outcome_col,
+                    time_fe_col=time_fe_col,
+                    iter=iter,
+                    tol=tol)
+  
+  att.est <- res$att %>% select(r,ATT) %>% rename(ATT.actual = ATT)
   
   # Use shuffled treatment histories to compute distribution of ATT
   # estimates under sharp null hypothesis. 
@@ -88,23 +74,41 @@ permutation_test <- function(outcome_var,panel_data,treatment_status,params,nper
   data_list <- vector("list", length = nperm)
   
   for (i in 1:nperm){
-    shuffled_data <- permute_treatment_history(panel_data,treatment_status,params)
-    att.null <- estimate_model(outcome_var,shuffled_data,params,num_cores)
+    
+    shuffled_data <- permute_treatment_history(data,
+                                               treatment_status,
+                                               cluster_var,
+                                               time_col,
+                                               event_time_col,
+                                               under_treatment_col)
+    
+    res <- impute_did(shuffled_data,
+                      id_col=id_col,
+                      time_col=time_col,
+                      event_time_col=event_time_col,
+                      under_treatment_col=under_treatment_col,
+                      outcome_col=outcome_col,
+                      time_fe_col=time_fe_col,
+                      iter=iter,
+                      tol=tol)
+    
+    att.null <- res$att %>% select(r,ATT)
     att.null$replicate <- i
     data_list[[i]] <- att.null
     
-    print(glue("{outcome_var} replicate {i} / {nperm}"))
+    print(glue("{outcome_col} replicate {i} / {nperm}"))
+    
   }
   
   # Create indicator variable for instances when permuted treatment history
   # results in an ATT estimate that is more extreme than actual treatment history
-  att.null <- bind_rows(data_list) %>% rename(estimate.permuted = estimate)
-  att.null <- left_join(att.null,att.est,by=params$event_time)
-  att.null$permuted.more.extreme <- as.integer(abs(att.null$estimate.permuted) >= abs(att.null$estimate.actual))
+  att.null <- bind_rows(data_list) %>% rename(ATT.permuted = ATT)
+  att.null <- left_join(att.null,att.est,by="r")
+  att.null$permuted.more.extreme <- as.integer(abs(att.null$ATT.permuted) >= abs(att.null$ATT.actual))
   
   # Compute Fisher exact p-value
   perm.p.value <- att.null %>% 
-    group_by(across(all_of(params$event_time))) %>% 
+    group_by(r) %>% 
     summarise(p.value = mean(permuted.more.extreme, na.rm = TRUE),
               n.perm.more.extreme = sum(permuted.more.extreme, na.rm = TRUE),
               n.perm = n())
@@ -164,36 +168,101 @@ treatment_status_path <- file.path(treatment_status_dir,treatment_status_filenam
 treatment_status <- read_parquet(treatment_status_path)
 treatment_status <- treatment_status %>% rename(year = calendar_time)
 
-# Keep only geographic unit, time, treatment indicator, and event time variables
-treatment_status$D <- treatment_status[[params$treatment_variable]]
-treatment_status <- treatment_status[,c(params$cluster_var,"year","D",params$event_time)]
+# Keep only geographic unit, time, treatment indicators, and event time variables
+treatment_status <- treatment_status[,c(params$cluster_var,
+                                        "year",params$treatment_variable,
+                                        params$treatment_event,
+                                        params$event_time)]
 
 ### *** CONDUCT PERMUTATION TESTS *** ###
 
 ## 60+ days delinquent
-res <- permutation_test("D60",panel_data,treatment_status,params,nperm,num_cores)
+res <- permutation_test(panel_data,
+                        outcome_col="D60",
+                        id_col="loanid",
+                        time_col="year",
+                        event_time_col=params$event_time,
+                        under_treatment_col=params$treatment_variable,
+                        time_fe_col="region_time",
+                        cluster_var=params$cluster_var,
+                        nperm=nperm)
+
 save_result_as_parquet(res,fitted_dir,proptype,"D60")
 
 ## Occupancy
-res <- permutation_test("occ",panel_data,treatment_status,params,nperm,num_cores)
+res <- permutation_test(panel_data,
+                        outcome_col="occ",
+                        id_col="loanid",
+                        time_col="year",
+                        event_time_col=params$event_time,
+                        under_treatment_col=params$treatment_variable,
+                        time_fe_col="region_time",
+                        cluster_var=params$cluster_var,
+                        nperm=nperm)
+
 save_result_as_parquet(res,fitted_dir,proptype,"occ")
 
 ## Net operating income
-res <- permutation_test("log_noi",panel_data,treatment_status,params,nperm,num_cores)
+res <- permutation_test(panel_data,
+                        outcome_col="log_noi",
+                        id_col="loanid",
+                        time_col="year",
+                        event_time_col=params$event_time,
+                        under_treatment_col=params$treatment_variable,
+                        time_fe_col="region_time",
+                        cluster_var=params$cluster_var,
+                        nperm=nperm)
+
 save_result_as_parquet(res,fitted_dir,proptype,"noi")
 
 ## Revenues
-res <- permutation_test("log_rev",panel_data,treatment_status,params,nperm,num_cores)
+res <- permutation_test(panel_data,
+                        outcome_col="log_rev",
+                        id_col="loanid",
+                        time_col="year",
+                        event_time_col=params$event_time,
+                        under_treatment_col=params$treatment_variable,
+                        time_fe_col="region_time",
+                        cluster_var=params$cluster_var,
+                        nperm=nperm)
+
 save_result_as_parquet(res,fitted_dir,proptype,"rev")
 
 ## Expenses
-res <- permutation_test("log_exp",panel_data,treatment_status,params,nperm,num_cores)
+res <- permutation_test(panel_data,
+                        outcome_col="log_exp",
+                        id_col="loanid",
+                        time_col="year",
+                        event_time_col=params$event_time,
+                        under_treatment_col=params$treatment_variable,
+                        time_fe_col="region_time",
+                        cluster_var=params$cluster_var,
+                        nperm=nperm)
+
 save_result_as_parquet(res,fitted_dir,proptype,"exp")
 
 ## DSCR < 1.0
-res <- permutation_test("dscr_below_one",panel_data,treatment_status,params,nperm,num_cores)
+res <- permutation_test(panel_data,
+                        outcome_col="dscr_below_one",
+                        id_col="loanid",
+                        time_col="year",
+                        event_time_col=params$event_time,
+                        under_treatment_col=params$treatment_variable,
+                        time_fe_col="region_time",
+                        cluster_var=params$cluster_var,
+                        nperm=nperm)
+
 save_result_as_parquet(res,fitted_dir,proptype,"dscr_below_one")
 
 ## Missing NOI data
-res <- permutation_test("missing_noi",panel_data,treatment_status,params,nperm,num_cores)
+res <- permutation_test(panel_data,
+                        outcome_col="missing_noi",
+                        id_col="loanid",
+                        time_col="year",
+                        event_time_col=params$event_time,
+                        under_treatment_col=params$treatment_variable,
+                        time_fe_col="region_time",
+                        cluster_var=params$cluster_var,
+                        nperm=nperm)
+
 save_result_as_parquet(res,fitted_dir,proptype,"missing_noi")

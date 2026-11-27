@@ -2,13 +2,13 @@
 
 #SBATCH -p general
 #SBATCH -N 1
-#SBATCH -n 8
-#SBATCH --mem=200g
+#SBATCH -n 1
+#SBATCH --mem=120g
 #SBATCH -t 2-00:00:00
 #SBATCH --mail-type=all
 #SBATCH --job-name=baseline_model
 #SBATCH --mail-user=kieranf@email.unc.edu
-#SBATCH --array=0,1,2,3
+#SBATCH --array=2
 
 module purge
 module load r/4.5.0
@@ -20,7 +20,7 @@ PROPTYPES=("GSE-MF" "MF" "RT" "OF")
 PROPTYPE=${PROPTYPES[$SLURM_ARRAY_TASK_ID]}
 
 # Number of bootstrap replicates drawn when computing SEs
-NBOOTS=100
+NBOOTS=200
 
 # Base case
 Rscript baseline_model.R \
@@ -29,8 +29,6 @@ Rscript baseline_model.R \
 --floodzones "FEMA_100y_floodplain,FEMA_500y_floodplain" \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
-
-Rscript postprocess_baseline_model.R --name "base_case" --proptype $PROPTYPE
 
 # Placebo test for pre-trends
 Rscript baseline_model.R \
@@ -44,7 +42,6 @@ Rscript baseline_model.R \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
-Rscript postprocess_baseline_model.R --name "base_case_placebo" --proptype $PROPTYPE
 Rscript placebo_test_baseline_model.R --name "base_case_placebo" --proptype $PROPTYPE
 
 # Placebo test for carryover effects
@@ -59,7 +56,6 @@ Rscript baseline_model.R \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
-Rscript postprocess_baseline_model.R --name "base_case_carryover" --proptype $PROPTYPE
 Rscript placebo_test_baseline_model.R --name "base_case_carryover" --proptype $PROPTYPE
 
 # Placebo test for spillover effects
@@ -74,5 +70,4 @@ Rscript baseline_model.R \
 --proptype $PROPTYPE \
 --nboots $NBOOTS
 
-Rscript postprocess_baseline_model.R --name "base_case_spillover" --proptype $PROPTYPE
 Rscript placebo_test_baseline_model.R --name "base_case_spillover" --proptype $PROPTYPE
