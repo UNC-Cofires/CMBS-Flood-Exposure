@@ -20,7 +20,7 @@ PROPTYPES=("GSE-MF" "MF" "RT" "OF")
 PROPTYPE=${PROPTYPES[$SLURM_ARRAY_TASK_ID]}
 
 # Number of bootstrap replicates drawn when computing SEs
-NBOOTS=100
+NBOOTS=200
 
 # Base case
 Rscript survival_model.R \

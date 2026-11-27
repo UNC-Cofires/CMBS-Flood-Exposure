@@ -9,8 +9,8 @@ library(dplyr)
 library(tidyr)
 library(fixest)
 
-# Load user-defined functions for building discrete-time hazard models
-source("discrete_time_hazard_model.R")
+# Load user-defined functions
+source("imputation_estimators.R")
 
 ### *** HELPER FUNCTIONS *** ###
 
@@ -93,7 +93,7 @@ option_list <- list(
   make_option("--filter_op", type = "character", default = "eq"),
   make_option("--filter_val", type = "character", default = NULL),
   make_option("--proptype", type = "character", default = "MF"),
-  make_option("--nboots",    type = "integer",   default = 200)
+  make_option("--nboots",    type = "integer",   default = 5)
 )
 
 params <- parse_args(OptionParser(option_list = option_list))
@@ -171,61 +171,61 @@ write(
 ### *** ESTIMATE EFFECTS OF FLOOD EXPOSURE ON LOAN REPAYMENT OUTCOMES *** ###
 
 ## First transition to 60-day delinquency
-D60_res <- counterfactual_cumulative_incidence(panel_data,
-                                               event_time_col=params$event_time,
-                                               treatment_event_col=params$treatment_event,
-                                               under_treatment_col=params$treatment_variable,
-                                               target_outcome="D60",
-                                               competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
-                                               cluster_var=geog_unit,
-                                               nboot=params$nboots)
+D60_res <- cif_counterfactual_imputation(panel_data,
+                                         event_time_col=params$event_time,
+                                         treatment_event_col=params$treatment_event,
+                                         under_treatment_col=params$treatment_variable,
+                                         target_outcome="D60",
+                                         competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
+                                         cluster_var=geog_unit,
+                                         nboot=params$nboots)
 
 save_result_as_parquet(D60_res,outfolder,params$proptype,"D60")
 
 ## First loan modification
-modification_res <- counterfactual_cumulative_incidence(panel_data,
-                                               event_time_col=params$event_time,
-                                               treatment_event_col=params$treatment_event,
-                                               under_treatment_col=params$treatment_variable,
-                                               target_outcome="modification_flag",
-                                               competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
-                                               cluster_var=geog_unit,
-                                               nboot=params$nboots)
+modification_res <- cif_counterfactual_imputation(panel_data,
+                                                  event_time_col=params$event_time,
+                                                  treatment_event_col=params$treatment_event,
+                                                  under_treatment_col=params$treatment_variable,
+                                                  target_outcome="modification_flag",
+                                                  competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
+                                                  cluster_var=geog_unit,
+                                                  nboot=params$nboots)
 
 save_result_as_parquet(modification_res,outfolder,params$proptype,"modification")
 
 ## Loan liquidations / repayments
-zero_balance_res <- counterfactual_cumulative_incidence(panel_data,
-                                               event_time_col=params$event_time,
-                                               treatment_event_col=params$treatment_event,
-                                               under_treatment_col=params$treatment_variable,
-                                               target_outcome="zero_balance_flag",
-                                               competing_outcomes=c("defeased_released_flag"),
-                                               cluster_var=geog_unit,
-                                               nboot=params$nboots)
+zero_balance_res <- cif_counterfactual_imputation(panel_data,
+                                                  event_time_col=params$event_time,
+                                                  treatment_event_col=params$treatment_event,
+                                                  under_treatment_col=params$treatment_variable,
+                                                  target_outcome="zero_balance_flag",
+                                                  competing_outcomes=c("defeased_released_flag"),
+                                                  cluster_var=geog_unit,
+                                                  nboot=params$nboots)
 
 save_result_as_parquet(zero_balance_res,outfolder,params$proptype,"zero_balance")
 
 ## Voluntary prepayments
-vol_prepay_res <- counterfactual_cumulative_incidence(panel_data,
-                                               event_time_col=params$event_time,
-                                               treatment_event_col=params$treatment_event,
-                                               under_treatment_col=params$treatment_variable,
-                                               target_outcome="vol_prepay",
-                                               competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
-                                               cluster_var=geog_unit,
-                                               nboot=params$nboots)
+vol_prepay_res <- cif_counterfactual_imputation(panel_data,
+                                                event_time_col=params$event_time,
+                                                treatment_event_col=params$treatment_event,
+                                                under_treatment_col=params$treatment_variable,
+                                                target_outcome="vol_prepay",
+                                                competing_outcomes=c("zero_balance_flag","defeased_released_flag"),
+                                                cluster_var=geog_unit,
+                                                nboot=params$nboots)
 
 save_result_as_parquet(vol_prepay_res,outfolder,params$proptype,"vol_prepay")
 
 ## Defeasance
-defeasance_res <- counterfactual_cumulative_incidence(panel_data,
-                                               event_time_col=params$event_time,
-                                               treatment_event_col=params$treatment_event,
-                                               under_treatment_col=params$treatment_variable,
-                                               target_outcome="defeased_released_flag",
-                                               competing_outcomes=c("zero_balance_flag"),
-                                               cluster_var=geog_unit,
-                                               nboot=params$nboots)
+defeasance_res <- cif_counterfactual_imputation(panel_data,
+                                                event_time_col=params$event_time,
+                                                treatment_event_col=params$treatment_event,
+                                                under_treatment_col=params$treatment_variable,
+                                                target_outcome="defeased_released_flag",
+                                                competing_outcomes=c("zero_balance_flag"),
+                                                cluster_var=geog_unit,
+                                                nboot=params$nboots)
 
 save_result_as_parquet(defeasance_res,outfolder,params$proptype,"defeasance")
